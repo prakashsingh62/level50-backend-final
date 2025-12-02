@@ -1,4 +1,3 @@
-
 def build_email(processed):
     body="Level-50 Daily Report\n\n"
     for r in processed:
