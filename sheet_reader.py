@@ -73,18 +73,23 @@ def get_client():
 # HELPER: Get Worksheet
 # =============================
 def get_ws(client):
+    global last_google_fail
+
     if client is None:
         return None
 
     try:
         if MODE == "TEST":
-            return client.open_by_key(TEST_SHEET_ID).worksheet(TEST_TAB)
+            ss = client.open_by_key(TEST_SHEET_ID)
+            return ss.worksheet(TEST_TAB)
 
-        return client.open_by_key(PROD_SHEET_ID).worksheet(PROD_TAB)
+        ss = client.open_by_key(PROD_SHEET_ID)
+        return ss.worksheet(PROD_TAB)
 
-    except:
+    except Exception as e:
+        # Google blocked metadata request
+        last_google_fail = time.time()
         return None
-
 
 # =============================
 # HELPER: Read Google Sheet with Retry + Backoff
