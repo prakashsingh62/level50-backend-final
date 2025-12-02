@@ -1,44 +1,37 @@
 import os
-import base64
-import json
+import smtplib
 from email.mime.text import MIMEText
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
+from email.mime.multipart import MIMEMultipart
 
+def send_email(subject, body):
+    """
+    Level-50 email sender
+    Sends to MULTIPLE recipients (from ENV)
+    Uses Gmail SMTP + App Password (stable on Railway)
+    """
 
-def get_gmail_service():
-    client_secret = json.loads(os.environ["CLIENT_SECRET_JSON"])
-    token_data = json.loads(os.environ["TOKEN_JSON"])
+    sender = os.getenv("SMTP_EMAIL")  # your Gmail address
+    app_password = os.getenv("SMTP_APP_PASSWORD")  # 16-char Gmail app password
 
-    creds = Credentials(
-        token=token_data["token"],
-        refresh_token=token_data["refresh_token"],
-        token_uri=token_data["token_uri"],
-        client_id=client_secret["client_id"],
-        client_secret=client_secret["client_secret"],
-        scopes=[
-            "https://www.googleapis.com/auth/gmail.send",
-            "https://www.googleapis.com/auth/gmail.compose",
-            "https://www.googleapis.com/auth/gmail.modify",
-        ],
-    )
+    if not sender or not app_password:
+        raise RuntimeError("Missing SMTP_EMAIL or SMTP_APP_PASSWORD environment variables")
 
-    return build("gmail", "v1", credentials=creds)
+    # Recipients list (comma separated)
+    recipients_env = os.getenv("EMAIL_RECIPIENTS", "")
+    recipients = [r.strip() for r in recipients_env.split(",") if r.strip()]
 
+    if not recipients:
+        raise RuntimeError("EMAIL_RECIPIENTS is empty — cannot send")
 
-def send_email(to_email, subject, body):
-    """Send email using Gmail API"""
-    service = get_gmail_service()
+    msg = MIMEMultipart()
+    msg["From"] = sender
+    msg["To"] = ", ".join(recipients)
+    msg["Subject"] = subject
 
-    msg = MIMEText(body, "plain")
-    msg["to"] = to_email
-    msg["subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
 
-    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-
-    service.users().messages().send(
-        userId="me",
-        body={"raw": raw}
-    ).execute()
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(sender, app_password)
+        server.sendmail(sender, recipients, msg.as_string())
 
     return True
