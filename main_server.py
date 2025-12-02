@@ -1,28 +1,28 @@
-# main_server.py
-# Level-50 FastAPI backend entrypoint
-# Clean, Railway-safe, uses backend_api.py
-
 from fastapi import FastAPI
-from logger import get_logger
-from backend_api import router as backend_router
+from sheet_writer import write_test_row
+from sheet_reader import read_sheet
+from backend_api import run_engine
+from email_sender import send_email
 
-log = get_logger()
+app = FastAPI(title="Level-50 Automation Backend")
 
-def create_app():
-    app = FastAPI(
-        title="Level-50 Automation Backend",
-        version="1.0",
-        docs_url="/docs",
-        redoc_url="/redoc"
-    )
+@app.get("/health")
+def health():
+    return {"status": "ok", "message": "Level-50 backend running"}
 
-    # Mount all Level-50 API endpoints
-    app.include_router(backend_router, prefix="")
+@app.get("/read")
+def read_api():
+    return read_sheet()
 
-    log.info("FastAPI Level-50 backend initialized")
-    return app
+@app.post("/run")
+def run_api():
+    return run_engine()
 
-app = create_app()
+@app.post("/email")
+def email_api():
+    return send_email()
 
-# No __main__ block needed because Railway uses:
-# uvicorn main_server:app --host 0.0.0.0 --port $PORT
+@app.post("/test/write")
+def test_write_api():
+    write_test_row()
+    return {"status": "test_write_ok"}
