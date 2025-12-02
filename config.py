@@ -1,22 +1,20 @@
-
 import os
 
-MODE = os.getenv("MODE","TEST")
+# Always use environment variables for Level-50
+MODE = os.getenv("MODE", "PROD")
 
-TEST_SHEET_ID = "1hKMwlnN3GAE4dxVGvq2WHT2-Om9SJ3P91L8cxioAeoo"
-TEST_TAB = "RFQ TEST SHEET"
+# Read sheet + tab from Railway variables
+PROD_SHEET_ID = os.getenv("PROD_SHEET_ID", "")
+PROD_TAB = os.getenv("PROD_TAB", "")
 
-PROD_SHEET_ID = os.getenv("PROD_SHEET_ID","")
-PROD_TAB = "DOMESTIC REGISTER 2025-26"
+# No test mode sheets inside code (test = prod when sheet id is test sheet)
+TEST_SHEET_ID = PROD_SHEET_ID
+TEST_TAB = PROD_TAB
 
+# Email recipients
 TEST_RECIPIENTS = ["sales@ventilengineering.com"]
 
+# TEMPORARY: send only to sales while testing
 PROD_RECIPIENTS = [
-    "sales@ventilengineering.com",
-    "info@ventilengineering.com",
-    "sales-support@ventilengineering.com",
-    "core@ventilengineering.com",
-    "insidesales.vepl@gmail.com",
-    "sales-domestic@ventilengineering.com",
-    "hiren@ventilengineering.com"
+    "sales@ventilengineering.com"
 ]
