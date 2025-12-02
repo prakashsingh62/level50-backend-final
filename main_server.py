@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from sheet_writer import write_test_row
-from sheet_reader import read_sheet
+from sheet_reader import read_rows
 from backend_api import run_engine
 from email_sender import send_email
 
