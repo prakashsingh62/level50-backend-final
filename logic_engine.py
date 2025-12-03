@@ -1,120 +1,92 @@
-# logic_engine.py
-# Level-50 Logic Engine (Final, Stable)
-
-def classify_row(r):
-    """
-    Your existing classification logic.
-    This function MUST always return one of:
-    "HIGH", "MEDIUM", "LOW", "VENDOR_PENDING",
-    "CLARIFICATION", "QUOTATION_RECEIVED",
-    "OVERDUE", "SKIP", "INVALID"
-    """
-
-    # --- BASIC VALIDATION ---
-    if not r or not isinstance(r, dict):
-        return "INVALID"
-
-    # Skip rows where concern person = NP
-    if str(r.get("CONCERN PERSON", "")).strip().upper() == "NP":
-        return "SKIP"
-
-    # Empty RFQ means skip
-    if not str(r.get("RFQ NO", "")).strip():
-        return "SKIP"
-
-    # Already closed RFQs
-    status = str(r.get("STATUS", "")).upper()
-    if status in ("CLOSED", "DONE", "COMPLETED"):
-        return "SKIP"
-
-    # Vendor pending → no quotation received
-    if not str(r.get("QUOTATION RECEIVED", "")).strip():
-        return "VENDOR_PENDING"
-
-    # Clarification pending
-    if str(r.get("CLARIFICATION", "")).strip():
-        return "CLARIFICATION"
-
-    # Quotation received
-    if str(r.get("QUOTATION RECEIVED", "")).strip():
-        return "QUOTATION_RECEIVED"
-
-    # Overdue
-    if r.get("DUE DAYS", 0) < 0:
-        return "OVERDUE"
-
-    # High / Medium / Low (normal RFQ priority)
-    dd = int(r.get("DUE DAYS", 99))
-    if dd <= 2:
-        return "HIGH"
-    if dd <= 3:
-        return "MEDIUM"
-    return "LOW"
-
-
-
-# ----------------------------------------------------------------------
-# ------------------------ MAIN ENGINE ---------------------------------
-# ----------------------------------------------------------------------
+from datetime import datetime, timedelta
 
 def run_engine(rows):
     """
-    rows → list of dictionaries from sheet_reader.py
-    RETURNS → (updates, email_content)
-    updates → rows that MUST be written back to Google Sheet
-    email_content → summary entries for email body
+    rows = values read from Google Sheet using sheet_reader.fetch_rows()
+
+    Returns:
+        updates: [
+            {"row": 5, "column": "STATUS", "value": "HIGH"},
+            {"row": 8, "column": "AGING", "value": "2"},
+        ]
+
+        email_content: [
+            "<h3>High Priority</h3> ....",
+            "<h3>Vendor Pending</h3> ...."
+        ]
     """
 
     updates = []
-    email_content = []
+    email_blocks = []
 
-    if not rows:
-        return [], []
+    if not rows or len(rows) < 2:
+        return updates, email_blocks
 
-    for r in rows:
+    header = rows[0]
+    body = rows[1:]
 
-        # Safety: ensure dict format
-        if not isinstance(r, dict):
-            continue
+    # Utility function to safely extract column value
+    def get(row, col_name, default=""):
+        if col_name not in header:
+            return default
+        idx = header.index(col_name)
+        return row[idx] if idx < len(row) else default
 
-        # CLASSIFY
+    # -----------------------------------------
+    # PROCESS ALL ROWS
+    # -----------------------------------------
+    for row_index, row in enumerate(body, start=2):      # Row 2 = Sheet row 2
+        status = get(row, "STATUS", "")
+        due_date_str = get(row, "DUE DATE", "")
+        vendor_resp = get(row, "VENDOR RESPONSE", "")
+        rfq_value = get(row, "VALUE", "")
+
+        # ---- Compute aging (example engine) ----
+        if due_date_str:
+            try:
+                due_date = datetime.strptime(due_date_str, "%d-%m-%Y")
+                aging_days = (datetime.now() - due_date).days
+            except:
+                aging_days = ""
+        else:
+            aging_days = ""
+
+        # Populate AGING column if computed
+        if isinstance(aging_days, int) and aging_days >= 0:
+            updates.append({
+                "row": row_index,
+                "column": "AGING",
+                "value": aging_days
+            })
+
+        # -----------------------------------------
+        # HIGH PRIORITY RULE (example)
+        # -----------------------------------------
+        if status == "HIGH":
+            email_blocks.append(
+                f"<p><b>Row {row_index}</b> — High Priority RFQ pending.</p>"
+            )
+
+        # -----------------------------------------
+        # VENDOR PENDING RULE (example)
+        # -----------------------------------------
+        if vendor_resp == "" and isinstance(aging_days, int) and aging_days >= 2:
+            email_blocks.append(
+                f"<p><b>Row {row_index}</b> — Vendor pending for {aging_days} days.</p>"
+            )
+
+        # -----------------------------------------
+        # VALUE-BASED LOGIC (example)
+        # -----------------------------------------
         try:
-            status = classify_row(r)
-        except Exception:
-            r["STATUS"] = "ERROR"
-            updates.append(r)
-            email_content.append({
-                "rfq": r.get("RFQ NO"),
-                "client": r.get("CUSTOMER NAME"),
-                "status": "ERROR",
-            })
-            continue
+            v = float(rfq_value)
+            if v > 500000:
+                updates.append({
+                    "row": row_index,
+                    "column": "FLAG",
+                    "value": "HIGH_VALUE"
+                })
+        except:
+            pass
 
-        # SKIP rows
-        if status == "SKIP":
-            continue
-
-        # INVALID rows
-        if status == "INVALID":
-            r["STATUS"] = "INVALID"
-            updates.append(r)
-            email_content.append({
-                "rfq": r.get("RFQ NO"),
-                "client": r.get("CUSTOMER NAME"),
-                "status": "INVALID",
-            })
-            continue
-
-        # NORMAL STATES (HIGH, MEDIUM, LOW, OVERDUE, PENDING, etc.)
-        r["STATUS"] = status
-        updates.append(r)
-
-        # Build lightweight email summary
-        email_content.append({
-            "rfq": r.get("RFQ NO"),
-            "client": r.get("CUSTOMER NAME"),
-            "status": status,
-            "due": r.get("DUE DAYS"),
-        })
-
-    return updates, email_content
+    return updates, email_blocks
