@@ -1,78 +1,77 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 from sheet_reader import fetch_rows
-from sheet_writer import write_updates   # ✅ CORRECT
+from sheet_writer import write_updates
 from logic_engine import run_engine
 from email_sender import send_email
-from logger import get_logger
-logger = get_logger()
+from logger import logger
 
-app = FastAPI(title="Level-50 Backend API")
+app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
-
-# ----------------------------------------------------
-# Test Write API
-# ----------------------------------------------------
 @app.post("/test/write")
 async def test_write_api():
     try:
-        write_updates([{"row": 2, "column": "TEST_COL", "value": "API_OK"}])   # ✅ FIXED
+        write_updates([{
+            "row": 2,
+            "column": "TEST_COL",
+            "value": "API_OK"
+        }])
         return {"status": "write_ok"}
     except Exception as e:
         logger.error(f"Error in /test/write: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# ----------------------------------------------------
-# Test Email API
-# ----------------------------------------------------
+
 @app.post("/email")
 async def email_api():
     try:
-        send_email("Level-50 Test Email", "<p>Your Level-50 SMTP/SendGrid email sender is working.</p>")
+        send_email("Level-50 Test Email",
+                   "<p>Your Level-50 SMTP/SendGrid email sender is working.</p>")
         return {"status": "email_sent"}
     except Exception as e:
-        logger.error(f"Email sending failed: {str(e)}")
+        logger.error(f"Error in /email: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# ----------------------------------------------------
-# RUN API (DEBUG MODE SUPPORTED)
-# ----------------------------------------------------
+
 @app.post("/run")
 async def run_api(debug: bool = False):
+    """
+    Main Level-50 pipeline:
+    1. Read rows
+    2. Run logic engine → updates + email_content (list)
+    3. Send email only if content exists AND not debug
+    4. Apply updates (Google Sheet)
+    """
 
     try:
         rows = fetch_rows()
         updates, email_content = run_engine(rows)
 
-        # DEBUG MODE
-        if debug and not email_content.strip():
-            email_content = (
-                "<h3>[DEBUG MODE]</h3>"
-                "<p>No reminder sections were generated.</p>"
-                "<p>This email is only for debugging.</p>"
-            )
+        # email_content is a LIST → join safely
+        final_email = "\n".join(email_content).strip()
 
-        # No content & not debug → do not send email
-        if not email_content.strip():
+        # If empty → skip email
+        if not final_email:
+            if debug:
+                return {
+                    "status": "run_completed_debug",
+                    "email_preview": "NO EMAIL GENERATED"
+                }
             return {"status": "run_completed_no_email"}
 
-        # Send email
-        send_email("Level-50 RFQ Reminder", email_content)
+        # Send mail only if NOT debug
+        if not debug:
+            send_email("Level-50 RFQ Reminder", final_email)
+        else:
+            # Only preview result
+            return {
+                "status": "run_completed_debug",
+                "email_preview": final_email
+            }
 
-        # Apply updates (REAL WRITER)
+        # Apply sheet updates
         if updates:
-            write_updates(updates)   # ✅ FIXED
+            write_updates(updates)
 
         return {"status": "run_completed"}
 
