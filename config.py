@@ -1,33 +1,52 @@
 import os
+import json
 
-# -------------------------------------------------------------
-# Level-50 FINAL CONFIG (NO TEST MODE)
-# -------------------------------------------------------------
+# ---------------------------------------------------------
+#  READ SERVICE ACCOUNT JSON FROM ENV
+# ---------------------------------------------------------
+raw_json = os.getenv("CLIENT_SECRET_JSON")
+if not raw_json:
+    raise RuntimeError("Missing env var: CLIENT_SECRET_JSON")
 
-# Always use production mode for Level-50 live automation
+try:
+    SERVICE_ACCOUNT_INFO = json.loads(raw_json)
+except Exception as e:
+    raise RuntimeError(f"Invalid CLIENT_SECRET_JSON value: {e}")
+
+# ---------------------------------------------------------
+#  MODE — Only PROD is allowed
+# ---------------------------------------------------------
 MODE = "PROD"
 
-# -------------------------------------------------------------
-# Google Sheets Settings
-# -------------------------------------------------------------
-PROD_SHEET_ID = os.getenv("PROD_SHEET_ID")   # MUST be set in Railway
-SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
+# ---------------------------------------------------------
+#  SHEET CONFIG (PROD ONLY)
+# ---------------------------------------------------------
+PROD_SHEET_ID = os.getenv("PROD_SHEET_ID")
+PROD_TAB = os.getenv("PROD_TAB")
 
 if not PROD_SHEET_ID:
     raise RuntimeError("Missing env var: PROD_SHEET_ID")
 
-if not SERVICE_ACCOUNT_JSON:
-    raise RuntimeError("Missing env var: SERVICE_ACCOUNT_JSON")
+if not PROD_TAB:
+    raise RuntimeError("Missing env var: PROD_TAB")
 
-# -------------------------------------------------------------
-# SendGrid Settings
-# -------------------------------------------------------------
+SHEET_ID = PROD_SHEET_ID
+SHEET_TAB = PROD_TAB
+
+# ---------------------------------------------------------
+#  EMAIL SETTINGS
+# ---------------------------------------------------------
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL")
+EMAIL_RECIPIENTS = os.getenv("EMAIL_RECIPIENTS")
 
 if not SENDGRID_API_KEY:
     raise RuntimeError("Missing env var: SENDGRID_API_KEY")
 
-# -------------------------------------------------------------
-# Email recipients (comma separated in Railway)
-# -------------------------------------------------------------
-EMAIL_RECIPIENTS = os.getenv("EMAIL_RECIPIENTS", "")
+if not SENDGRID_FROM_EMAIL:
+    raise RuntimeError("Missing env var: SENDGRID_FROM_EMAIL")
+
+if not EMAIL_RECIPIENTS:
+    raise RuntimeError("Missing env var: EMAIL_RECIPIENTS")
+
+EMAIL_RECIPIENTS = [email.strip() for email in EMAIL_RECIPIENTS.split(",") if email.strip()]
