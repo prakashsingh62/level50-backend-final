@@ -1,37 +1,44 @@
 import os
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import requests
+
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+EMAIL_FROM = os.getenv("EMAIL_FROM", "sales@ventilengineering.com")
+EMAIL_RECIPIENTS = os.getenv("EMAIL_RECIPIENTS", "")
 
 def send_email(subject, body):
-    """
-    Level-50 email sender
-    Sends to MULTIPLE recipients (from ENV)
-    Uses Gmail SMTP + App Password (stable on Railway)
-    """
+    if not SENDGRID_API_KEY:
+        raise RuntimeError("SENDGRID_API_KEY is missing")
 
-    sender = os.getenv("SMTP_EMAIL")  # your Gmail address
-    app_password = os.getenv("SMTP_APP_PASSWORD")  # 16-char Gmail app password
+    if not EMAIL_RECIPIENTS:
+        raise RuntimeError("EMAIL_RECIPIENTS is empty")
 
-    if not sender or not app_password:
-        raise RuntimeError("Missing SMTP_EMAIL or SMTP_APP_PASSWORD environment variables")
+    recipients = [x.strip() for x in EMAIL_RECIPIENTS.split(",") if x.strip()]
 
-    # Recipients list (comma separated)
-    recipients_env = os.getenv("EMAIL_RECIPIENTS", "")
-    recipients = [r.strip() for r in recipients_env.split(",") if r.strip()]
+    url = "https://api.sendgrid.com/v3/mail/send"
 
-    if not recipients:
-        raise RuntimeError("EMAIL_RECIPIENTS is empty — cannot send")
+    data = {
+        "personalizations": [{
+            "to": [{"email": r} for r in recipients]
+        }],
+        "from": {
+            "email": EMAIL_FROM,
+            "name": "VENTIL ENGINEERING"
+        },
+        "subject": subject,
+        "content": [{
+            "type": "text/html",
+            "value": body
+        }]
+    }
 
-    msg = MIMEMultipart()
-    msg["From"] = sender
-    msg["To"] = ", ".join(recipients)
-    msg["Subject"] = subject
+    headers = {
+        "Authorization": f"Bearer {SENDGRID_API_KEY}",
+        "Content-Type": "application/json"
+    }
 
-    msg.attach(MIMEText(body, "plain"))
+    response = requests.post(url, json=data, headers=headers)
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(sender, app_password)
-        server.sendmail(sender, recipients, msg.as_string())
+    if response.status_code not in (200, 202):
+        raise RuntimeError(f"SendGrid error: {response.status_code}, {response.text}")
 
-    return True
+    return {"status": "email_sent"}
