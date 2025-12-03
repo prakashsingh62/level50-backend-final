@@ -1,44 +1,42 @@
 import os
-import requests
-
-SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
-EMAIL_FROM = os.getenv("EMAIL_FROM", "sales@ventilengineering.com")
-EMAIL_RECIPIENTS = os.getenv("EMAIL_RECIPIENTS", "")
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 def send_email(subject, body):
-    if not SENDGRID_API_KEY:
-        raise RuntimeError("SENDGRID_API_KEY is missing")
+    """
+    Level-50 SendGrid Email Sender
+    Uses API Key + Verified Sender (no SMTP)
+    Sends to MULTIPLE recipients from ENV
+    """
 
-    if not EMAIL_RECIPIENTS:
-        raise RuntimeError("EMAIL_RECIPIENTS is empty")
+    api_key = os.getenv("SENDGRID_API_KEY")
+    from_email = os.getenv("SENDGRID_FROM_EMAIL")
+    recipients_env = os.getenv("EMAIL_RECIPIENTS", "")
 
-    recipients = [x.strip() for x in EMAIL_RECIPIENTS.split(",") if x.strip()]
+    if not api_key:
+        raise RuntimeError("Missing SENDGRID_API_KEY in environment variables")
 
-    url = "https://api.sendgrid.com/v3/mail/send"
+    if not from_email:
+        raise RuntimeError("Missing SENDGRID_FROM_EMAIL in environment variables")
 
-    data = {
-        "personalizations": [{
-            "to": [{"email": r} for r in recipients]
-        }],
-        "from": {
-            "email": EMAIL_FROM,
-            "name": "VENTIL ENGINEERING"
-        },
-        "subject": subject,
-        "content": [{
-            "type": "text/html",
-            "value": body
-        }]
-    }
+    recipients = [r.strip() for r in recipients_env.split(",") if r.strip()]
 
-    headers = {
-        "Authorization": f"Bearer {SENDGRID_API_KEY}",
-        "Content-Type": "application/json"
-    }
+    if not recipients:
+        raise RuntimeError("EMAIL_RECIPIENTS is empty — cannot send email")
 
-    response = requests.post(url, json=data, headers=headers)
+    message = Mail(
+        from_email=from_email,
+        to_emails=recipients,
+        subject=subject,
+        plain_text_content=body,
+    )
 
-    if response.status_code not in (200, 202):
-        raise RuntimeError(f"SendGrid error: {response.status_code}, {response.text}")
+    try:
+        sg = SendGridAPIClient(api_key)
+        response = sg.send(message)
+        print(f"SendGrid Email Status: {response.status_code}")
+        return True
 
-    return {"status": "email_sent"}
+    except Exception as e:
+        print(f"SendGrid Error: {e}")
+        raise RuntimeError("Failed to send email via SendGrid")
