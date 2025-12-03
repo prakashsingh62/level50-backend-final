@@ -1,42 +1,23 @@
-import os
 import json
+import os
 
-# ---------------------------------------------------------
-# MODE
-# ---------------------------------------------------------
-MODE = os.getenv("MODE", "PROD").upper()
-if MODE not in ("PROD", "TEST"):
-    raise RuntimeError("Invalid MODE env var. Allowed: TEST or PROD")
+# Paste your full service account JSON as a python dict here
+CLIENT_SECRET_JSON = {
+    "type": "service_account",
+    "project_id": "vepl-rfq",
+    "private_key_id": "YOUR_KEY_ID",
+    "private_key": "-----BEGIN PRIVATE KEY-----\nYOUR_KEY\n-----END PRIVATE KEY-----\n",
+    "client_email": "level50-backend-final@vepl-rfq.iam.gserviceaccount.com",
+    "client_id": "110687579827756007110",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": "https://www.googleapis.com/.../your-cert-url"
+}
 
-# ---------------------------------------------------------
-# GOOGLE SERVICE ACCOUNT CREDENTIALS
-# ---------------------------------------------------------
-CLIENT_SECRET_JSON_STR = os.getenv("CLIENT_SECRET_JSON")
-if not CLIENT_SECRET_JSON_STR:
-    raise RuntimeError("Missing env var: CLIENT_SECRET_JSON")
+# NEW SHEET
+PROD_SHEET_ID = "1hKMwlnN3GAE4dxVGvq2WHT2-Om9SJ3P91L8cxioAeoo"
+PROD_TAB = "RFQ TEST SHEET"
 
-# Parsed dict version we will use everywhere
-CLIENT_SECRET_JSON = json.loads(CLIENT_SECRET_JSON_STR)
-
-# ---------------------------------------------------------
-# SHEET SETTINGS
-# ---------------------------------------------------------
-PROD_SHEET_ID = os.getenv("PROD_SHEET_ID")
-PROD_TAB = os.getenv("PROD_TAB")
-
-if not PROD_SHEET_ID or not PROD_TAB:
-    raise RuntimeError("Missing env vars: PROD_SHEET_ID or PROD_TAB")
-
-# ---------------------------------------------------------
-# EMAIL SETTINGS
-# ---------------------------------------------------------
-EMAIL_RECIPIENTS = os.getenv("EMAIL_RECIPIENTS", "")
-
-SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
-SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL")
-
-if not SENDGRID_API_KEY:
-    raise RuntimeError("Missing env var: SENDGRID_API_KEY")
-
-if not SENDGRID_FROM_EMAIL:
-    raise RuntimeError("Missing env var: SENDGRID_FROM_EMAIL")
+# Email settings
+MAIL_TO = ["sales@ventilengineering.com"]
