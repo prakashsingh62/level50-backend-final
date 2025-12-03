@@ -2,15 +2,11 @@ import os
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from config import SENDGRID_API_KEY, SENDGRID_FROM_EMAIL, EMAIL_RECIPIENTS
-from logger import logger
+from logger import get_logger
+
+logger = get_logger()
 
 def send_email(subject, html_body):
-    """
-    Sends a single email to all recipients defined in env EMAIL_RECIPIENTS.
-    EMAIL_RECIPIENTS must be comma-separated list:
-        "sales@..., info@..., support@..."
-    """
-
     recipients = [x.strip() for x in EMAIL_RECIPIENTS.split(",") if x.strip()]
 
     if not recipients:
