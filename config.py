@@ -1,36 +1,22 @@
-# config.py — FINAL LEVEL-50 CONFIG (NO TEST MODE)
-
 import os
+from dotenv import load_dotenv
 
-# Google Sheet Configuration
-SHEET_ID = os.getenv("PROD_SHEET_ID")
-TAB_NAME = os.getenv("PROD_TAB")
+load_dotenv()
 
-# Email Recipients (comma-separated)
-EMAIL_RECIPIENTS = os.getenv("EMAIL_RECIPIENTS", "")
+# ----------------------------
+# GOOGLE SHEET CONFIG
+# ----------------------------
+SHEET_ID = os.getenv("SHEET_ID")
+CLIENT_SECRET_JSON = os.getenv("CLIENT_SECRET_JSON")
 
-# SendGrid Configuration
+# ----------------------------
+# SENDGRID CONFIG
+# ----------------------------
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
-SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL")
+MAIL_FROM = os.getenv("MAIL_FROM")
+MAIL_TO = os.getenv("MAIL_TO")
 
-# Service Account JSON
-SERVICE_ACCOUNT_JSON = os.getenv("CLIENT_SECRET_JSON")
-
-# MODE — always PROD (debug handled via ?debug=true in API)
-MODE = "PROD"
-
-# Validation checks
-if not SHEET_ID:
-    raise Exception("Missing environment variable: PROD_SHEET_ID")
-
-if not TAB_NAME:
-    raise Exception("Missing environment variable: PROD_TAB")
-
-if not SENDGRID_API_KEY:
-    raise Exception("Missing environment variable: SENDGRID_API_KEY")
-
-if not SENDGRID_FROM_EMAIL:
-    raise Exception("Missing environment variable: SENDGRID_FROM_EMAIL")
-
-if not SERVICE_ACCOUNT_JSON:
-    raise Exception("Missing environment variable: CLIENT_SECRET_JSON")
+# ----------------------------
+# MODE (Only PROD allowed now)
+# ----------------------------
+MODE = "PROD"   # No TEST mode anymore
