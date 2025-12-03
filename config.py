@@ -5,19 +5,17 @@ import json
 # MODE
 # ---------------------------------------------------------
 MODE = os.getenv("MODE", "PROD").upper()
-
 if MODE not in ("PROD", "TEST"):
     raise RuntimeError("Invalid MODE env var. Allowed: TEST or PROD")
 
 # ---------------------------------------------------------
 # GOOGLE SERVICE ACCOUNT CREDENTIALS
-# (You said DO NOT rename → keep CLIENT_SECRET_JSON)
 # ---------------------------------------------------------
 CLIENT_SECRET_JSON_STR = os.getenv("CLIENT_SECRET_JSON")
-
 if not CLIENT_SECRET_JSON_STR:
     raise RuntimeError("Missing env var: CLIENT_SECRET_JSON")
 
+# Parsed dict version we will use everywhere
 CLIENT_SECRET_JSON = json.loads(CLIENT_SECRET_JSON_STR)
 
 # ---------------------------------------------------------
