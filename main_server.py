@@ -1,16 +1,20 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
 from logic_engine import classify_rows
 from email_builder import build_email_html
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import sendgrid
 from sendgrid.helpers.mail import Mail
+from datetime import date
 
 app = FastAPI()
 
-SHEET_ID = "1x60zesQY67FViw4F-SzrWnbU00kJq5QdBrcoRrmmTVw"
-SERVICE_ACCOUNT_FILE = "service_account.json"
+# UPDATED: New test sheet
+SHEET_ID = "1hKMwlnN3GAE4dxVGvq2WHT2-Om9SJ3P91L8cxioAeoo"
+TAB_RANGE = "RFQ TEST SHEET!A1:AO5000"
+
+# IMPORTANT — correct file path (as deployed in Railway)
+SERVICE_ACCOUNT_FILE = "/app/vepl-rfq-service-account.json"
 
 scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=scopes)
@@ -19,27 +23,38 @@ def read_sheet():
     service = build("sheets", "v4", credentials=creds)
     result = service.spreadsheets().values().get(
         spreadsheetId=SHEET_ID,
-        range="DOMESTIC REGISTER 2025-26!A1:AO5000"
+        range=TAB_RANGE
     ).execute()
+
     rows = result.get("values", [])
+    if not rows:
+        return []
+
     headers = rows[0]
     data = []
+
     for r in rows[1:]:
-        d = {}
+        row_dict = {}
         for i, h in enumerate(headers):
-            d[h] = r[i] if i < len(r) else ""
-        data.append(d)
+            row_dict[h] = r[i] if i < len(r) else ""
+            # If missing cell → set empty string
+        data.append(row_dict)
+
     return data
+
 
 def send_mail(html):
     sg = sendgrid.SendGridAPIClient(api_key="YOUR_SENDGRID_KEY")
+
     msg = Mail(
         from_email="sales@ventilengineering.com",
-        to_emails=["sales@ventilengineering.com"],
-        subject=f"Daily RFQ Reminder — DOMESTIC REGISTER 2025-2026 — {__import__('datetime').date.today():%d-%b-%Y}",
+        to_emails="sales@ventilengineering.com",   # ⬅ ONLY ONE RECIPIENT NOW
+        subject=f"Daily RFQ Reminder — RFQ TEST SHEET — {date.today():%d-%b-%Y}",
         html_content=html
     )
+
     sg.send(msg)
+
 
 @app.post("/run")
 def run(debug: bool = False):
@@ -48,7 +63,10 @@ def run(debug: bool = False):
     html = build_email_html(summary, sections)
 
     if debug:
-        return {"status": "debug_ok", "email_preview": html}
+        return {
+            "status": "debug_ok",
+            "email_preview": html
+        }
 
     send_mail(html)
     return {"status": "email_sent"}
