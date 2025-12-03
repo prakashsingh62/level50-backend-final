@@ -13,8 +13,8 @@ app = FastAPI()
 SHEET_ID = "1hKMwlnN3GAE4dxVGvq2WHT2-Om9SJ3P91L8cxioAeoo"
 TAB_RANGE = "RFQ TEST SHEET!A1:AO5000"
 
-# IMPORTANT — correct file path (as deployed in Railway)
-SERVICE_ACCOUNT_FILE = "/app/vepl-rfq-service-account.json"
+# PERMANENT FIX — file must exist in repo root
+SERVICE_ACCOUNT_FILE = "service_account.json"
 
 scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=scopes)
@@ -32,12 +32,8 @@ def read_sheet():
 
     headers = rows[0]
     data = []
-
     for r in rows[1:]:
-        row_dict = {}
-        for i, h in enumerate(headers):
-            row_dict[h] = r[i] if i < len(r) else ""
-            # If missing cell → set empty string
+        row_dict = {headers[i]: r[i] if i < len(r) else "" for i in range(len(headers))}
         data.append(row_dict)
 
     return data
@@ -48,7 +44,7 @@ def send_mail(html):
 
     msg = Mail(
         from_email="sales@ventilengineering.com",
-        to_emails="sales@ventilengineering.com",   # ⬅ ONLY ONE RECIPIENT NOW
+        to_emails="sales@ventilengineering.com",
         subject=f"Daily RFQ Reminder — RFQ TEST SHEET — {date.today():%d-%b-%Y}",
         html_content=html
     )
@@ -63,10 +59,7 @@ def run(debug: bool = False):
     html = build_email_html(summary, sections)
 
     if debug:
-        return {
-            "status": "debug_ok",
-            "email_preview": html
-        }
+        return {"status": "debug_ok", "email_preview": html}
 
     send_mail(html)
     return {"status": "email_sent"}
