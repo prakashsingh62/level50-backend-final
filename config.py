@@ -1,43 +1,44 @@
 import os
 import json
 
-# ----------------------------------------
-# Load Service Account JSON (as string)
-# ----------------------------------------
-CLIENT_SECRET_JSON = os.getenv("CLIENT_SECRET_JSON")
-if not CLIENT_SECRET_JSON:
+# ---------------------------------------------------------
+# MODE
+# ---------------------------------------------------------
+MODE = os.getenv("MODE", "PROD").upper()
+
+if MODE not in ("PROD", "TEST"):
+    raise RuntimeError("Invalid MODE env var. Allowed: TEST or PROD")
+
+# ---------------------------------------------------------
+# GOOGLE SERVICE ACCOUNT CREDENTIALS
+# (You said DO NOT rename → keep CLIENT_SECRET_JSON)
+# ---------------------------------------------------------
+CLIENT_SECRET_JSON_STR = os.getenv("CLIENT_SECRET_JSON")
+
+if not CLIENT_SECRET_JSON_STR:
     raise RuntimeError("Missing env var: CLIENT_SECRET_JSON")
 
-SERVICE_ACCOUNT_INFO = json.loads(CLIENT_SECRET_JSON)
+CLIENT_SECRET_JSON = json.loads(CLIENT_SECRET_JSON_STR)
 
-# ----------------------------------------
-# Email settings
-# ----------------------------------------
+# ---------------------------------------------------------
+# SHEET SETTINGS
+# ---------------------------------------------------------
+PROD_SHEET_ID = os.getenv("PROD_SHEET_ID")
+PROD_TAB = os.getenv("PROD_TAB")
+
+if not PROD_SHEET_ID or not PROD_TAB:
+    raise RuntimeError("Missing env vars: PROD_SHEET_ID or PROD_TAB")
+
+# ---------------------------------------------------------
+# EMAIL SETTINGS
+# ---------------------------------------------------------
 EMAIL_RECIPIENTS = os.getenv("EMAIL_RECIPIENTS", "")
-RECIPIENT_LIST = [x.strip() for x in EMAIL_RECIPIENTS.split(",") if x.strip()]
 
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
 SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL")
 
 if not SENDGRID_API_KEY:
     raise RuntimeError("Missing env var: SENDGRID_API_KEY")
+
 if not SENDGRID_FROM_EMAIL:
     raise RuntimeError("Missing env var: SENDGRID_FROM_EMAIL")
-
-# ----------------------------------------
-# Sheet settings
-# ----------------------------------------
-PROD_SHEET_ID = os.getenv("PROD_SHEET_ID")
-PROD_TAB = os.getenv("PROD_TAB")
-
-if not PROD_SHEET_ID:
-    raise RuntimeError("Missing env var: PROD_SHEET_ID")
-if not PROD_TAB:
-    raise RuntimeError("Missing env var: PROD_TAB")
-
-# ----------------------------------------
-# Mode (always PROD)
-# ----------------------------------------
-MODE = os.getenv("MODE", "PROD").upper()
-if MODE not in ["PROD"]:
-    raise RuntimeError("Invalid MODE env var. Allowed: PROD only")
