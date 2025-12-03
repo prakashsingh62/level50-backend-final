@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-
 from sheet_reader import fetch_rows
 from sheet_writer import write_updates
 from logic_engine import run_engine
