@@ -4,7 +4,8 @@ from sheet_reader import fetch_rows
 from sheet_writer import write_updates   # ✅ CORRECT
 from logic_engine import run_engine
 from email_sender import send_email
-from logger import logger
+from logger import get_logger
+logger = get_logger()
 
 app = FastAPI(title="Level-50 Backend API")
 
