@@ -1,72 +1,34 @@
 from fastapi import FastAPI
-from logic_engine import classify_rows
-from email_builder import build_email_html
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from datetime import date
-import sendgrid
-from sendgrid.helpers.mail import Mail
-import json
-from config import CLIENT_SECRET_JSON, PROD_SHEET_ID, PROD_TAB
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 
-app = FastAPI()
+from router_email import router as email_router
+from router_test import router as test_router
+from run_router import router as run_router
 
-# Convert JSON string → Python dict
-if isinstance(CLIENT_SECRET_JSON, str):
-    SERVICE_INFO = json.loads(CLIENT_SECRET_JSON)
-else:
-    SERVICE_INFO = CLIENT_SECRET_JSON
+app = FastAPI(
+    title="Level-50 Backend",
+    description="Final Production API",
+    version="1.0.0"
+)
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Create credentials directly from Railway variable
-creds = Credentials.from_service_account_info(SERVICE_INFO, scopes=SCOPES)
+# Health check
+@app.get("/health")
+def health():
+    return {"status": "ok", "message": "Level-50 backend running"}
 
+# Routers
+app.include_router(test_router)
+app.include_router(email_router)
+app.include_router(run_router)
 
-def read_sheet():
-    service = build("sheets", "v4", credentials=creds)
-
-    tab_range = f"{PROD_TAB}!A1:AO5000"
-
-    result = service.spreadsheets().values().get(
-        spreadsheetId=PROD_SHEET_ID,
-        range=tab_range
-    ).execute()
-
-    rows = result.get("values", [])
-    if not rows:
-        return []
-
-    headers = rows[0]
-    data = []
-    for r in rows[1:]:
-        row_dict = {headers[i]: r[i] if i < len(r) else "" for i in range(len(headers))}
-        data.append(row_dict)
-
-    return data
-
-
-def send_mail(html):
-    sg = sendgrid.SendGridAPIClient(api_key="YOUR_SENDGRID_KEY")
-
-    msg = Mail(
-        from_email="sales@ventilengineering.com",
-        to_emails="sales@ventilengineering.com",
-        subject=f"Daily RFQ Reminder — {PROD_TAB} — {date.today():%d-%b-%Y}",
-        html_content=html
-    )
-
-    sg.send(msg)
-
-
-@app.post("/run")
-def run(debug: bool = False):
-    rows = read_sheet()
-    summary, sections = classify_rows(rows)
-    html = build_email_html(summary, sections)
-
-    if debug:
-        return {"status": "debug_ok", "email_preview": html}
-
-    send_mail(html)
-    return {"status": "email_sent"}
+if __name__ == "__main__":
+    uvicorn.run("main_server:app", host="0.0.0.0", port=8000)
