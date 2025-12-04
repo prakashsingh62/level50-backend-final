@@ -1,12 +1,17 @@
 import json
 import os
 
-# Load service account JSON from Railway environment variable
-CLIENT_SECRET_JSON = json.loads(os.getenv("CLIENT_SECRET_JSON"))
+# Load the service account JSON from Railway variable
+CLIENT_SECRET_JSON = json.loads(os.getenv("CLIENT_SECRET_JSON", "{}"))
 
-# Sheet configuration
-PROD_SHEET_ID = os.getenv("PROD_SHEET_ID", "1hKMwlnN3GAE4dxVGvq2WHT2-Om9SJ3P91L8cxioAeoo")
-PROD_TAB = os.getenv("PROD_TAB", "RFQ TEST SHEET")
+# Sheet settings
+PROD_SHEET_ID = os.getenv("PROD_SHEET_ID")
+PROD_TAB = os.getenv("PROD_TAB")
 
 # Email settings
-MAIL_TO = ["sales@ventilengineering.com"]
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL")
+EMAIL_RECIPIENTS = os.getenv("EMAIL_RECIPIENTS", "sales@ventilengineering.com")
+
+# Mode (optional)
+MODE = os.getenv("MODE", "PROD")
