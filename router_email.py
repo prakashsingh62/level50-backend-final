@@ -2,8 +2,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi import status as http_status
 import traceback
 
-# Direct engine access (avoids circular import)
-from sheet_reader import read_rows
+# Corrected import
+from sheet_reader import read_sheet
 from logic_engine import process_sheet
 from sheet_writer import write_updates
 
@@ -67,8 +67,8 @@ def manual_reminder():
     - Sends email to sales@ventilengineering.com only
     """
     try:
-        rows = read_rows()
-        processed, engine_meta = process_sheet(rows)    # updated Level-51 engine returns tuple
+        rows = read_sheet()          # FIXED HERE
+        processed, engine_meta = process_sheet(rows)
 
         # Write results back to Google Sheet
         if processed:
