@@ -1,40 +1,28 @@
+import os
+import json
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-from logger import get_logger
-from config import CLIENT_SECRET_JSON, PROD_SHEET_ID, PROD_TAB
 
-logger = get_logger()
+SHEET_ID = os.getenv("PROD_SHEET_ID")
+TAB_NAME = os.getenv("PROD_TAB")
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+def load_credentials():
+    service_json = os.getenv("CLIENT_SECRET_JSON")
+    data = json.loads(service_json)
+    creds = Credentials.from_service_account_info(
+        data,
+        scopes=["https://www.googleapis.com/auth/spreadsheets"]
+    )
+    return creds
 
-# Load credentials safely from config (already parsed dict)
-creds = Credentials.from_service_account_info(
-    CLIENT_SECRET_JSON,
-    scopes=SCOPES
-)
+def read_sheet():
+    creds = load_credentials()
+    service = build("sheets", "v4", credentials=creds)
+    sheet = service.spreadsheets().values()
 
-def fetch_rows():
-    """
-    Reads all rows from the Google Sheet.
-    Returns a 2D list of rows.
-    """
-    try:
-        service = build("sheets", "v4", credentials=creds)
-        sheet = service.spreadsheets()
+    result = sheet.get(
+        spreadsheetId=SHEET_ID,
+        range=f"{TAB_NAME}!A:Z"
+    ).execute()
 
-        range_name = f"{PROD_TAB}!A:Z"
-        result = sheet.values().get(
-            spreadsheetId=PROD_SHEET_ID, range=range_name
-        ).execute()
-
-        rows = result.get("values", [])
-        if not rows:
-            logger.warning("Sheet is empty!")
-            return []
-
-        logger.info(f"Fetched {len(rows)} rows from sheet.")
-        return rows
-
-    except Exception as e:
-        logger.error(f"Error in fetch_rows(): {str(e)}")
-        return []
+    return result.get("values", [])
