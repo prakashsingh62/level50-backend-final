@@ -1,28 +1,39 @@
 import os
-import json
+import gspread
 from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
+import json
 
-SHEET_ID = os.getenv("PROD_SHEET_ID")
-TAB_NAME = os.getenv("PROD_TAB")
-
-def load_credentials():
-    service_json = os.getenv("CLIENT_SECRET_JSON")
-    data = json.loads(service_json)
-    creds = Credentials.from_service_account_info(
-        data,
-        scopes=["https://www.googleapis.com/auth/spreadsheets"]
-    )
-    return creds
+from config import CLIENT_SECRET_JSON, PROD_SHEET_ID, PROD_TAB
 
 def read_sheet():
-    creds = load_credentials()
-    service = build("sheets", "v4", credentials=creds)
-    sheet = service.spreadsheets().values()
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
 
-    result = sheet.get(
-        spreadsheetId=SHEET_ID,
-        range=f"{TAB_NAME}!A:Z"
-    ).execute()
+    creds = Credentials.from_service_account_info(
+        json.loads(CLIENT_SECRET_JSON),
+        scopes=scopes
+    )
+    client = gspread.authorize(creds)
 
-    return result.get("values", [])
+    sheet = client.open_by_key(PROD_SHEET_ID)
+    worksheet = sheet.worksheet(PROD_TAB)
+
+    rows = worksheet.get_all_values()
+
+    if not rows or len(rows) < 2:
+        return []
+
+    headers = rows[0]
+    data_rows = rows[1:]
+
+    final_data = []
+    for r in data_rows:
+        row_dict = {}
+        for i, h in enumerate(headers):
+            value = r[i] if i < len(r) else ""
+            row_dict[h.strip()] = value
+        final_data.append(row_dict)
+
+    return final_data
