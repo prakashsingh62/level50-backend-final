@@ -1,25 +1,17 @@
-# router_email.py
-# Manual reminder route — calls the existing /run engine (backend_api.run_engine_api)
-# and sends a single email to sales@ventilengineering.com
-
 from fastapi import APIRouter, HTTPException
 from fastapi import status as http_status
 import traceback
 
-# Use the actual working engine endpoint function from backend_api (your /run endpoint)
-try:
-    from backend_api import run_engine_api
-except Exception as e:
-    raise ImportError("Failed to import run_engine_api from backend_api. "
-                      "Ensure backend_api.py exists and defines run_engine_api().") from e
+# Direct engine access (avoids circular import)
+from sheet_reader import read_rows
+from logic_engine import process_sheet
+from sheet_writer import write_updates
 
-# Use your existing send_email wrapper
-try:
-    from email_sender import send_email
-except Exception:
-    raise ImportError("Failed to import send_email from email_sender. Ensure email_sender.send_email exists.")
+# Email sender (SendGrid wrapper)
+from email_sender import send_email
 
 router = APIRouter()
+
 SALES_RECIPIENT = "sales@ventilengineering.com"
 
 
@@ -28,52 +20,41 @@ def build_email_from_engine_result(result: dict) -> str:
     lines = []
     lines.append("Level-50 Manual Reminder — RFQ Follow-up")
     lines.append("")
+
     summary = result.get("summary", {})
     if summary:
         lines.append("Summary:")
         for k in ("HIGH", "MEDIUM", "LOW", "OVERDUE", "NOACTION", "SKIP"):
             if k in summary:
-                lines.append(f"  {k}: {summary.get(k)}")
+                lines.append(f"  {k}: {summary[k]}")
         lines.append("")
 
-    level51 = result.get("level51") or {}
+    level51 = result.get("level51", {})
     if level51:
-        lines.append("Data health (level51):")
+        lines.append("Data Health:")
         for k in ("total_raw_rows", "kept_rows", "autofixed_rows", "rows_with_invalid_fields", "skipped_np"):
             if k in level51:
-                lines.append(f"  {k}: {level51.get(k)}")
+                lines.append(f"  {k}: {level51[k]}")
         lines.append("")
 
-    sections = result.get("sections") or {}
+    sections = result.get("sections", {})
     actionable = []
-    # prefer HIGH and OVERDUE
+
+    # Prefer HIGH and OVERDUE rows
     for key in ("HIGH", "OVERDUE"):
         for r in sections.get(key, [])[:6]:
-            rfq = r.get("RFQ NO") or r.get("RFQ_NO") or r.get("RFQ No") or ""
-            cust = r.get("CUSTOMER NAME") or r.get("CUSTOMER") or ""
-            due = r.get("DUE DATE") or r.get("DUE_DATE") or ""
-            actionable.append((key, rfq, cust, due))
-
-    # fallback: take first few across sections
-    if not actionable:
-        for sec, items in sections.items():
-            for r in items[:6]:
-                rfq = r.get("RFQ NO") or r.get("RFQ_NO") or ""
-                cust = r.get("CUSTOMER NAME") or ""
-                due = r.get("DUE DATE") or ""
-                actionable.append((sec, rfq, cust, due))
+            actionable.append((key, r.get("RFQ NO"), r.get("CUSTOMER NAME"), r.get("DUE DATE")))
 
     if actionable:
-        lines.append("Top actionable RFQs (sample):")
-        for sec, rfq, cust, due in actionable[:6]:
+        lines.append("Top actionable RFQs:")
+        for sec, rfq, cust, due in actionable:
             lines.append(f" - [{sec}] RFQ: {rfq} | Cust: {cust} | Due: {due}")
         lines.append("")
     else:
-        lines.append("No actionable RFQs found for manual reminder.")
+        lines.append("No actionable RFQs found.")
         lines.append("")
 
-    lines.append("If an item is already handled, ignore this email.")
-    lines.append("")
+    lines.append("This is a manual reminder.")
     lines.append("-- Automation System")
     return "\n".join(lines)
 
@@ -82,38 +63,35 @@ def build_email_from_engine_result(result: dict) -> str:
 def manual_reminder():
     """
     Manual one-click reminder:
-    - Calls backend_api.run_engine_api() to run the engine
-    - Sends the compiled summary ONLY to sales@ventilengineering.com
+    - Runs Level-50 engine directly (no backend_api import)
+    - Sends email to sales@ventilengineering.com only
     """
     try:
-        # Call the existing /run function. It returns a dict (the same shape your /run returns).
-        engine_result = run_engine_api()
+        rows = read_rows()
+        processed, engine_meta = process_sheet(rows)    # updated Level-51 engine returns tuple
 
-        # If backend_api.run_engine_api returned an HTTPException or similar, normalize it
-        if isinstance(engine_result, HTTPException):
-            raise engine_result
+        # Write results back to Google Sheet
+        if processed:
+            write_updates(processed)
 
-        # Build email body
-        body = build_email_from_engine_result(engine_result)
-
-        # Subject
+        # Build email
+        body = build_email_from_engine_result(engine_meta)
         subject = "Manual Reminder — RFQ Follow-up"
 
-        # Send email (only to SALES_RECIPIENT)
+        # Send email
         send_result = send_email(SALES_RECIPIENT, subject, body)
 
         return {
             "status": "sent",
             "recipient": SALES_RECIPIENT,
-            "send_result": send_result,
-            "engine_summary": engine_result.get("summary"),
-            "level51": engine_result.get("level51")
+            "engine_summary": engine_meta.get("summary"),
+            "level51": engine_meta.get("level51"),
+            "send_result": send_result
         }
 
-    except HTTPException as httpe:
-        # re-raise HTTPExceptions to preserve status
-        raise httpe
     except Exception as ex:
         tb = traceback.format_exc()
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail=f"manual_reminder_failed: {str(ex)}\n{tb}")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"manual_reminder_failed: {str(ex)}\n{tb}"
+        )
