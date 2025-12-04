@@ -1,16 +1,36 @@
+import os
 import sendgrid
-from sendgrid.helpers.mail import Mail
-from config import SENDGRID_API_KEY, SENDGRID_FROM_EMAIL
+from sendgrid.helpers.mail import Mail, Email, To, Content
 
-def send_email(to_emails, subject, html_content):
-    sg = sendgrid.SendGridAPIClient(api_key=SENDGRID_API_KEY)
 
-    email = Mail(
-        from_email=SENDGRID_FROM_EMAIL,
-        to_emails=to_emails,
+def send_email(to, subject, body, is_html=False):
+    """
+    Send email using SendGrid with support for both plain text and HTML.
+    """
+
+    sg = sendgrid.SendGridAPIClient(api_key=os.getenv("SENDGRID_API_KEY"))
+
+    # Select content type
+    if is_html:
+        content = Content("text/html", body)
+    else:
+        content = Content("text/plain", body)
+
+    # Build email structure
+    mail = Mail(
+        from_email=Email("sales@ventilengineering.com", "RFQ Automation System"),
+        to_emails=To(to),
         subject=subject,
-        html_content=html_content
+        plain_text_content=None if is_html else body,
+        html_content=body if is_html else None
     )
 
-    response = sg.send(email)
-    return response.status_code
+    # Send the email
+    response = sg.client.mail.send.post(request_body=mail.get())
+
+    # Return response for debugging
+    return {
+        "status_code": response.status_code,
+        "body": str(response.body),
+        "headers": dict(response.headers)
+    }
