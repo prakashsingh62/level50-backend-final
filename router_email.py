@@ -1,10 +1,10 @@
 from fastapi import APIRouter
-from email_sender import send_email          # same folder import
-from email_builder import build_email_html   # same folder import
+from email_sender import send_email
+from email_builder import build_email_html
 
 router = APIRouter()
 
-@router.post("/email")
+@router.post("/send")
 async def send_email_route():
     """
     Manual email trigger (debugging)
