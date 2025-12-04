@@ -1,42 +1,75 @@
 import datetime
+from sheet_reader import read_sheet
 
-DATE_FORMAT = "%d-%m-%Y"
 
-FINAL_SKIP_STATUSES = {"closed", "completed", "regret", "submitted", "done"}
+# ---------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------
 
-def parse_date(val):
-    if not val:
+def parse_date(value):
+    """Parse date safely from sheet values."""
+    if not value:
         return None
+    if isinstance(value, datetime.date):
+        return value
     try:
-        return datetime.datetime.strptime(val.strip(), DATE_FORMAT).date()
+        return datetime.datetime.strptime(value, "%d-%b-%Y").date()
     except:
-        return None
+        try:
+            return datetime.datetime.strptime(value, "%Y-%m-%d").date()
+        except:
+            return None
 
-def days_between(d1, d2):
-    if not d1 or not d2:
-        return None
-    return (d1 - d2).days
 
-def compute_next_step(days_overdue, vendor_pending, client_clarification):
-    if days_overdue is not None and days_overdue > 0:
-        return "Overdue – prepare immediately"
-    if vendor_pending:
+def days_between(date_obj):
+    """Return days between today and the given date."""
+    if not date_obj:
+        return None
+    today = datetime.date.today()
+    return (today - date_obj).days
+
+
+def compute_next_step(row):
+    """Compute recommended next step for reminder email."""
+    status = (row.get("VENDOR QUOTATION STATUS") or "").strip().lower()
+    final = (row.get("FINAL STATUS") or "").strip().lower()
+    post_query = (row.get("POST OFFER QUERY") or "").strip()
+
+    if final in ["closed", "completed", "submitted", "regret", "done"]:
+        return None  # skip
+
+    if status == "" and row.get("INQUIRY SENT ON"):
         return "Vendor follow-up now"
-    if client_clarification:
-        return "Prepare clarification reply"
-    return ""
+
+    if status not in ["", None]:
+        return "Prepare immediate offer"
+
+    if post_query:
+        return "Respond to client query"
+
+    return "Follow-up now"
+
+
+# ---------------------------------------------------------
+# Classification Engine
+# ---------------------------------------------------------
 
 def classify_rows(rows):
-    today = datetime.date.today()
+    """
+    Apply Level-50 rules and produce:
+    - Summary counts
+    - Section-wise grouped rows
+    """
 
+    today = datetime.date.today()
     summary = {
         "high": 0,
         "medium": 0,
         "low": 0,
         "vendor_pending": 0,
-        "clarification": 0,
+        "client_clarifications": 0,
         "post_offer": 0,
-        "overdue": 0
+        "overdue": 0,
     }
 
     sections = {
@@ -44,69 +77,98 @@ def classify_rows(rows):
         "medium": [],
         "low": [],
         "vendor_pending": [],
-        "clarification": [],
+        "client_clarifications": [],
         "post_offer": [],
-        "overdue": []
+        "overdue": [],
     }
 
-    for r in rows:
-        rfq_no = r.get("RFQ NO", "").strip()
-        uid = r.get("UID NO", "").strip()
-        customer = r.get("CUSTOMER NAME", "").strip()
-        due_raw = r.get("DUE DATE", "").strip()
-        final_status = r.get("FINAL STATUS", "").strip().lower()
-        vendor_pending_flag = "vendor" in r.get("VENDOR QUOTATION STATUS", "").lower()
-        clarification_flag = bool(r.get("POST OFFER QUERY", "").strip())
+    for row in rows:
+        final_status = (row.get("FINAL STATUS") or "").strip().lower()
+        due_date_str = row.get("DUE DATE")
+        due_date = parse_date(due_date_str)
+        inquiry_sent = parse_date(row.get("INQUIRY SENT ON"))
+        vendor_status = (row.get("VENDOR QUOTATION STATUS") or "").strip()
+        post_query = (row.get("POST OFFER QUERY") or "").strip()
 
-        if final_status in FINAL_SKIP_STATUSES:
+        # Skip invalid rows
+        if final_status in ["closed", "completed", "submitted", "regret", "done"]:
             continue
-
-        due_date = parse_date(due_raw)
         if not due_date:
-            continue
+            continue  # user requested: skip rows without due date
 
-        days_overdue = days_between(today, due_date)
-        if days_overdue is not None and days_overdue > 10:
-            continue
+        # Compute fields
+        overdue_days = days_between(due_date)
+        aging = days_between(due_date)
 
-        next_step = compute_next_step(days_overdue, vendor_pending_flag, clarification_flag)
+        next_step = compute_next_step(row)
 
-        base_row = {
-            "rfq": rfq_no,
-            "uid": uid,
-            "customer": customer,
-            "due": due_raw,
-            "next_step": next_step,
-            "days_overdue": days_overdue if days_overdue else 0
+        row_block = {
+            "RFQ": row.get("RFQ NO"),
+            "UID": row.get("UID NO"),
+            "Customer": row.get("CUSTOMER NAME"),
+            "Due": due_date_str,
+            "Value": row.get("VEPL OFFER VALUE"),
+            "Aging": aging,
+            "NextStep": next_step,
         }
 
-        # Classification
-        if days_overdue and days_overdue > 0:
-            summary["overdue"] += 1
-            sections["overdue"].append(base_row)
-
-        if vendor_pending_flag:
-            summary["vendor_pending"] += 1
-            sections["vendor_pending"].append(base_row)
-
-        if clarification_flag:
-            summary["clarification"] += 1
-            sections["clarification"].append(base_row)
-
         # Priority logic
-        if days_overdue and days_overdue > 0:
+        days_to_due = (due_date - today).days
+        if days_to_due <= 2:
             summary["high"] += 1
-            sections["high"].append(base_row)
-        else:
-            # Within due range
-            if 0 <= days_overdue <= 2:
-                summary["high"] += 1
-                sections["high"].append(base_row)
-            elif 3 <= days_overdue <= 4:
-                summary["medium"] += 1
-                sections["medium"].append(base_row)
-            else:
-                summary["low"] += 1
-                sections["low"].append(base_row)
+            sections["high"].append(row_block)
+            continue
+        if days_to_due <= 3:
+            summary["medium"] += 1
+            sections["medium"].append(row_block)
+            continue
+        if days_to_due <= 4:
+            summary["low"] += 1
+            sections["low"].append(row_block)
+            continue
+
+        # Vendor pending section
+        if vendor_status == "" and inquiry_sent:
+            if days_between(inquiry_sent) >= 2:
+                summary["vendor_pending"] += 1
+                sections["vendor_pending"].append(row_block)
+                continue
+
+        # Post-offer query
+        if post_query:
+            summary["post_offer"] += 1
+            sections["post_offer"].append(row_block)
+            continue
+
+        # Overdue
+        if overdue_days is not None and overdue_days > 0:
+            summary["overdue"] += 1
+            sections["overdue"].append(row_block)
+            continue
 
     return summary, sections
+
+
+# ---------------------------------------------------------
+# PUBLIC FUNCTIONS (Required by routers)
+# ---------------------------------------------------------
+
+def prepare_rows_for_email(rows):
+    """Used by /email router & debug preview."""
+    summary, sections = classify_rows(rows)
+    return summary, sections
+
+
+def run_level50():
+    """
+    MAIN ENGINE — called by:
+    - /run (production)
+    - daily cron (Railway)
+    - /email preview testing
+    """
+    rows = read_sheet()
+    summary, sections = classify_rows(rows)
+    return {
+        "summary": summary,
+        "sections": sections,
+    }
