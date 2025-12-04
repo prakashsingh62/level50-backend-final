@@ -3,9 +3,7 @@ from fastapi import status as http_status
 import traceback
 
 from sheet_reader import read_sheet
-from logic_engine import run_level50          # FIXED IMPORT
-from sheet_writer import write_updates
-
+from logic_engine import run_level50
 from email_sender import send_email
 
 router = APIRouter()
@@ -61,25 +59,15 @@ def build_email_from_engine_result(result: dict) -> str:
 @router.post("/manual-reminder")
 def manual_reminder():
     try:
-        rows = read_sheet()
+        # Read rows (not used directly; engine reads internally)
+        _ = read_sheet()
 
-        # RUN ENGINE (Level-50 + Level-51)
         engine_output = run_level50(debug=False)
 
-        # Write back processed outputs only if engine succeeded
-        if engine_output.get("status") == "success":
-            sections = engine_output.get("sections", {})
-            # Flatten sections into row list for write_updates()
-            processed_rows = []
-            for lst in sections.values():
-                processed_rows.extend(lst)
-            write_updates(processed_rows)
-
-        # Build email
+        # Build email only — NO WRITE UPDATES HERE
         body = build_email_from_engine_result(engine_output)
         subject = "Manual Reminder — RFQ Follow-up"
 
-        # Send email
         send_result = send_email(SALES_RECIPIENT, subject, body)
 
         return {
