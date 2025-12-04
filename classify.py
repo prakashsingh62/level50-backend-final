@@ -31,6 +31,11 @@ def classify_row(r):
     if cp == "NP":
         return "SKIP"
 
+    # Skip rows where FINAL STATUS is closed/completed/etc
+    final = (r.get("FINAL STATUS", "") or "").strip().lower()
+    if final in ("closed", "completed", "regret", "submitted", "done"):
+        return "SKIP"
+
     due = parse_date(r.get("DUE DATE", ""))
     if not due:
         return "UNKNOWN"
@@ -48,3 +53,44 @@ def classify_row(r):
         return "LOW"
 
     return "NOACTION"
+
+
+# NEW FUNCTION — Required by logic_engine.py
+def classify_rows(rows):
+    """
+    logic_engine.py expects this function.
+    It must return:
+        summary, sections_dict
+    """
+
+    summary = {
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 0,
+        "OVERDUE": 0,
+        "UNKNOWN": 0,
+        "NOACTION": 0,
+        "SKIP": 0
+    }
+
+    sections = {
+        "HIGH": [],
+        "MEDIUM": [],
+        "LOW": [],
+        "OVERDUE": [],
+        "UNKNOWN": [],
+        "NOACTION": []
+    }
+
+    for r in rows:
+        category = classify_row(r)
+
+        # Count all
+        if category in summary:
+            summary[category] += 1
+
+        # Store rows only if actionable
+        if category in sections:
+            sections[category].append(r)
+
+    return summary, sections
