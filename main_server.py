@@ -3,27 +3,34 @@ from logic_engine import classify_rows
 from email_builder import build_email_html
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from datetime import date
 import sendgrid
 from sendgrid.helpers.mail import Mail
-from datetime import date
+import json
+from config import CLIENT_SECRET_JSON, PROD_SHEET_ID, PROD_TAB
 
 app = FastAPI()
 
-# UPDATED: New test sheet
-SHEET_ID = "1hKMwlnN3GAE4dxVGvq2WHT2-Om9SJ3P91L8cxioAeoo"
-TAB_RANGE = "RFQ TEST SHEET!A1:AO5000"
+# Convert JSON string → Python dict
+if isinstance(CLIENT_SECRET_JSON, str):
+    SERVICE_INFO = json.loads(CLIENT_SECRET_JSON)
+else:
+    SERVICE_INFO = CLIENT_SECRET_JSON
 
-# PERMANENT FIX — file must exist in repo root
-SERVICE_ACCOUNT_FILE = "service_account.json"
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
-scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=scopes)
+# Create credentials directly from Railway variable
+creds = Credentials.from_service_account_info(SERVICE_INFO, scopes=SCOPES)
+
 
 def read_sheet():
     service = build("sheets", "v4", credentials=creds)
+
+    tab_range = f"{PROD_TAB}!A1:AO5000"
+
     result = service.spreadsheets().values().get(
-        spreadsheetId=SHEET_ID,
-        range=TAB_RANGE
+        spreadsheetId=PROD_SHEET_ID,
+        range=tab_range
     ).execute()
 
     rows = result.get("values", [])
@@ -45,7 +52,7 @@ def send_mail(html):
     msg = Mail(
         from_email="sales@ventilengineering.com",
         to_emails="sales@ventilengineering.com",
-        subject=f"Daily RFQ Reminder — RFQ TEST SHEET — {date.today():%d-%b-%Y}",
+        subject=f"Daily RFQ Reminder — {PROD_TAB} — {date.today():%d-%b-%Y}",
         html_content=html
     )
 
