@@ -1,39 +1,59 @@
 import os
-import gspread
-from google.oauth2.service_account import Credentials
 import json
-
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 from config import CLIENT_SECRET_JSON, PROD_SHEET_ID, PROD_TAB
 
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+
+def load_service_account():
+    """
+    Handles both:
+    - dict (Railway auto-parsed)
+    - string (raw JSON)
+    """
+    if isinstance(CLIENT_SECRET_JSON, dict):
+        return CLIENT_SECRET_JSON
+
+    if isinstance(CLIENT_SECRET_JSON, str):
+        try:
+            return json.loads(CLIENT_SECRET_JSON)
+        except Exception:
+            # If Railway escaped it incorrectly, try aggressive fix
+            cleaned = CLIENT_SECRET_JSON.replace('\\"', '"')
+            return json.loads(cleaned)
+
+    raise ValueError("Invalid CLIENT_SECRET_JSON format")
+
+
 def read_sheet():
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
+    service_info = load_service_account()
 
-    creds = Credentials.from_service_account_info(
-        json.loads(CLIENT_SECRET_JSON),
-        scopes=scopes
+    credentials = service_account.Credentials.from_service_account_info(
+        service_info,
+        scopes=SCOPES
     )
-    client = gspread.authorize(creds)
 
-    sheet = client.open_by_key(PROD_SHEET_ID)
-    worksheet = sheet.worksheet(PROD_TAB)
+    service = build("sheets", "v4", credentials=credentials)
+    sheet = service.spreadsheets()
+    range_name = f"{PROD_TAB}!A:Z"
 
-    rows = worksheet.get_all_values()
+    result = sheet.values().get(
+        spreadsheetId=PROD_SHEET_ID,
+        range=range_name
+    ).execute()
 
-    if not rows or len(rows) < 2:
+    values = result.get("values", [])
+
+    # Convert rows into dicts
+    if not values:
         return []
 
-    headers = rows[0]
-    data_rows = rows[1:]
+    headers = values[0]
+    rows = []
 
-    final_data = []
-    for r in data_rows:
-        row_dict = {}
-        for i, h in enumerate(headers):
-            value = r[i] if i < len(r) else ""
-            row_dict[h.strip()] = value
-        final_data.append(row_dict)
+    for row in values[1:]:
+        row_dict = {headers[i]: (row[i] if i < len(row) else "") for i in range(len(headers))}
+        rows.append(row_dict)
 
-    return final_data
+    return rows
