@@ -1,29 +1,26 @@
 from fastapi import APIRouter, Query
 from logic_engine import run_level50
+from email_builder import build_email
 from email_sender import send_email
-from config import MODE
+from config import EMAIL_RECIPIENTS
 
 router = APIRouter()
 
-
 @router.post("/run")
-def run_api(debug: bool = Query(False, description="Enable debug mode")):
-    """
-    Main endpoint to run Level-50 logic.
-    """
+def run_api(debug: bool = Query(False)):
     result = run_level50()
+    html = build_email(result["summary"], result["sections"])
 
-    # Debug = return preview (NO email sent)
     if debug:
         return {
-            "status": "run_completed_debug",
-            "summary": result["summary"],
-            "sections": result["sections"],
+            "status": "debug",
+            "email_preview": html
         }
 
-    # PRODUCTION MODE = send email
-    if MODE == "production":
-        send_email(result["summary"], result["sections"])
-        return {"status": "email_sent"}
+    send_email(
+        to_emails=EMAIL_RECIPIENTS,
+        subject="Level-50 RFQ Reminder",
+        html_content=html
+    )
 
-    return {"status": "run_completed_no_email"}
+    return {"status": "email_sent"}
