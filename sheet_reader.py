@@ -57,3 +57,12 @@ def read_sheet():
         rows.append(row_dict)
 
     return rows
+
+
+# -----------------------------------------------------------
+# 🔥 BACKWARD COMPATIBILITY FIX
+# Older code still imports read_rows(), so we provide a wrapper
+# -----------------------------------------------------------
+def read_rows():
+    """Old router compatibility — maps to read_sheet()."""
+    return read_sheet()
