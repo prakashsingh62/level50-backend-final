@@ -1,44 +1,66 @@
-import os
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail, Email, To, Content
+from fastapi import APIRouter
+from sheet_reader import read_rows
+from logic_engine import process_sheet
+from email_builder import build_email_html
+from email_sender import send_email
 
-SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+router = APIRouter()
 
-def send_email(to, subject, body, is_html=False):
-    """
-    Simple SendGrid email wrapper.
-    Works for BOTH manual reminder & daily reminder.
-    """
+# -----------------------------
+# Manual Reminder Trigger
+# -----------------------------
+@router.post("/manual-reminder")
+def manual_reminder():
+    # 1) Read sheet
+    rows = read_rows()
 
-    if SENDGRID_API_KEY is None:
-        return {"error": "Missing SENDGRID_API_KEY"}
+    # 2) Classify + prepare sections
+    result = process_sheet(rows)
+    summary = result["summary"]
+    sections = result["sections"]
 
-    from_email = Email("rfq@ventilengineering.com")
+    # 3) Build HTML body
+    html_body = build_email_html(summary, sections)
 
-    # If HTML → set content type accordingly
-    if is_html:
-        content = Content("text/html", body)
-    else:
-        content = Content("text/plain", body)
-
-    message = Mail(
-        from_email=from_email,
-        to_emails=[to],
-        subject=subject,
-        plain_text_content=None,
-        html_content=body if is_html else None
+    # 4) Send mail
+    send_result = send_email(
+        to="sales@ventilengineering.com",
+        subject="Manual RFQ Reminder (Triggered Manually)",
+        body=html_body,
+        is_html=True
     )
 
-    try:
-        sg = SendGridAPIClient(SENDGRID_API_KEY)
-        response = sg.send(message)
-        return {
-            "status": "sent",
-            "code": response.status_code
-        }
+    return {
+        "status": "manual reminder sent",
+        "send_result": send_result
+    }
 
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+
+# -----------------------------
+# Daily Reminder Trigger
+# -----------------------------
+@router.post("/daily-reminder")
+def daily_reminder():
+    # 1) Read sheet
+    rows = read_rows()
+
+    # 2) Classify + prepare sections
+    result = process_sheet(rows)
+    summary = result["summary"]
+    sections = result["sections"]
+
+    # 3) Build HTML body
+    html_body = build_email_html(summary, sections)
+
+    # 4) Send mail
+    send_result = send_email(
+        to="sales@ventilengineering.com",
+        subject="Daily RFQ Reminder (Automated 8AM)",
+        body=html_body,
+        is_html=True
+    )
+
+    return {
+        "status": "daily reminder sent",
+        "send_result": send_result
+    }
