@@ -1,17 +1,27 @@
-import uvicorn
 import os
+import uvicorn
 
-# Detect if CRON mode
+# Railway Cron sets this automatically when running a scheduled job
 IS_CRON = os.environ.get("RAILWAY_RUN_CRON") == "1"
 
+
+# --------------------------------------------------
+# 🚀 CRON MODE — RUN DAILY REMINDER ONLY
+# --------------------------------------------------
 if IS_CRON:
-    # DAILY REMINDER MODE
     from daily_sender import run_daily_email
 
     if __name__ == "__main__":
+        print("Running Level-50 Daily Reminder via Cron...")
         run_daily_email()
+        print("Daily Reminder Completed.")
+    # DO NOT LOAD FASTAPI IN CRON MODE
+    # DO NOT LOAD ROUTERS
+    # EXIT AFTER EMAIL
 else:
-    # NORMAL API MODE
+    # --------------------------------------------------
+    # 🌐 NORMAL SERVER MODE — FASTAPI + ROUTERS
+    # --------------------------------------------------
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
 
@@ -21,7 +31,7 @@ else:
 
     app = FastAPI(title="Level-50 Automation Engine")
 
-    # CORS
+    # ---- CORS ----
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -30,7 +40,7 @@ else:
         allow_headers=["*"],
     )
 
-    # ROUTERS
+    # ---- ROUTERS ----
     app.include_router(run_router)
     app.include_router(test_router)
     app.include_router(email_router)
@@ -39,5 +49,6 @@ else:
     async def root():
         return {"status": "Level-50 backend active"}
 
+    # ---- API SERVER ----
     if __name__ == "__main__":
         uvicorn.run(app, host="0.0.0.0", port=8000)
