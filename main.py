@@ -2,18 +2,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Routers
-from run_router import router as run_router
-from router_test import router as test_router
-from email_router import router as email_router
-from manual_reminder_router import router as manual_router  # <-- NEW IMPORTANT ROUTER
+from backend_api import router as backend_router
+from manual_reminder_router import router as manual_router
 
 app = FastAPI(
-    title="Level 50 Backend Final",
-    description="Production backend for RFQ automation",
-    version="1.0.0"
+    title="Level 51 Automation",
+    version="1.0.0",
 )
 
-# CORS (allows all clients)
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,13 +19,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers
-app.include_router(run_router)
-app.include_router(test_router)
-app.include_router(email_router)
-app.include_router(manual_router)  # <-- REQUIRED FOR MANUAL REMINDER
-
+# Routers include
+app.include_router(backend_router, prefix="/api")
+app.include_router(manual_router)
 
 @app.get("/")
 def root():
-    return {"message": "Level 50 Backend Final Running"}
+    return {"status": "Level 51 Automation Server Running"}
+
