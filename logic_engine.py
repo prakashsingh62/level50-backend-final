@@ -80,4 +80,13 @@ def process_sheet(rows):
     return {
         "summary": summary,
         "sections": sections
-    }
+    
+
+def run_level50(rows):
+    """
+    Backward-compatibility wrapper.
+    Older routers expect run_level50() to exist.
+    """
+    return process_sheet(rows)
+    
+    
