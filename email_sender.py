@@ -1,71 +1,44 @@
-# email_sender.py
-# Final sendgrid wrapper — robust, minimal, explicit arguments.
 import os
-import json
-from typing import Optional, Dict, Any
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail, Email, To, Content
 
-import sendgrid
-from sendgrid.helpers.mail import Mail
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
 
-def send_email(
-    to: str,
-    subject: str,
-    body: str,
-    is_html: bool = False,
-    from_email: str = "sales@ventilengineering.com",
-    from_name: str = "RFQ Automation System",
-    reply_to: Optional[str] = None,
-) -> Dict[str, Any]:
+def send_email(to, subject, body, is_html=False):
     """
-    Send email using SendGrid.
-    - to: single recipient email (string). If you need multiple, pass comma-separated and call split in router.
-    - body: html or plain text depending on is_html.
-    - reply_to: optional reply-to email address (string).
-    Returns dict with status_code, body, headers for debugging.
+    Simple SendGrid email wrapper.
+    Works for BOTH manual reminder & daily reminder.
     """
 
-    api_key = os.getenv("SENDGRID_API_KEY")
-    if not api_key:
-        return {"status_code": 500, "error": "missing SENDGRID_API_KEY"}
+    if SENDGRID_API_KEY is None:
+        return {"error": "Missing SENDGRID_API_KEY"}
 
-    sg = sendgrid.SendGridAPIClient(api_key=api_key)
+    from_email = Email("rfq@ventilengineering.com")
 
-    # Build Mail object using template-friendly inputs
-    # Use raw strings for from/to — SendGrid helper accepts string addresses.
-    # Put html_content when is_html True else plain_text_content.
-    mail_kwargs = {
-        "from_email": {"email": from_email, "name": from_name},
-        "subject": subject,
-        "personalizations": [
-            {
-                "to": [{"email": to}],
-            }
-        ]
-    }
-
+    # If HTML → set content type accordingly
     if is_html:
-        mail_kwargs["html_content"] = body
-        mail_kwargs["plain_text_content"] = None
+        content = Content("text/html", body)
     else:
-        mail_kwargs["plain_text_content"] = body
-        mail_kwargs["html_content"] = None
+        content = Content("text/plain", body)
 
-    # Add optional reply_to
-    if reply_to:
-        mail_kwargs["reply_to"] = {"email": reply_to}
+    message = Mail(
+        from_email=from_email,
+        to_emails=[to],
+        subject=subject,
+        plain_text_content=None,
+        html_content=body if is_html else None
+    )
 
-    # Construct Mail via raw dict to avoid mismatched helper signatures across sendgrid versions
-    mail = Mail(**mail_kwargs)
-
-    resp = sg.client.mail.send.post(request_body=mail.get())
-    # Normalize response
     try:
-        headers = dict(resp.headers)
-    except Exception:
-        headers = {}
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
+        return {
+            "status": "sent",
+            "code": response.status_code
+        }
 
-    return {
-        "status_code": getattr(resp, "status_code", None),
-        "body": getattr(resp, "body", None) if getattr(resp, "body", None) else "",
-        "headers": headers
-    }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
