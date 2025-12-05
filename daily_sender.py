@@ -1,46 +1,38 @@
-import traceback
-from sheet_reader import read_rows
-from logic_engine import process_sheet
-from email_builder import build_email_html
-from email_sender import send_email
+import os
+import json
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
 
 
-# ----------------------------------------------------
-# DAILY REMINDER ENTRYPOINT
-# This must run ONCE and exit immediately.
-# ----------------------------------------------------
-def run_daily_sender():
+def get_service():
+    # Load service account JSON from Railway variable (correct name)
+    info = json.loads(os.environ["CLIENT_SECRET_JSON"])
+
+    creds = Credentials.from_service_account_info(
+        info,
+        scopes=["https://www.googleapis.com/auth/spreadsheets"]
+    )
+
+    service = build("sheets", "v4", credentials=creds)
+    return service
+
+
+def read_rows():
+    service = get_service()
+
+    sheet_id = os.environ["PROD_SHEET_ID"]
+    tab_name = os.environ["PROD_TAB"]
+
     try:
-        print("Daily sender started...")
-
-        # 1) Read all rows from Google Sheet
-        rows = read_rows()
-        print(f"Loaded {len(rows)} rows")
-
-        # 2) Process logic
-        result = process_sheet(rows)
-        summary = result["summary"]
-        sections = result["sections"]
-
-        # 3) Build HTML
-        html = build_email_html(summary, sections)
-        print("HTML email generated")
-
-        # 4) Send the email
-        send_email(
-            subject="Daily RFQ Reminder",
-            html_content=html
+        result = (
+            service.spreadsheets()
+            .values()
+            .get(spreadsheetId=sheet_id, range=f"{tab_name}!A:Z")
+            .execute()
         )
 
-        print("Daily sender completed successfully.")
+        rows = result.get("values", [])
+        return rows
 
     except Exception as e:
-        print("ERROR in daily sender:", e)
-        traceback.print_exc()
-
-
-# ----------------------------------------------------
-# Ensure Railway Cron executes directly and exits.
-# ----------------------------------------------------
-if __name__ == "__main__":
-    run_daily_sender()
+        raise Exception(f"Google Sheet read failed: {e}")
