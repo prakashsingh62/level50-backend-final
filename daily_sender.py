@@ -1,46 +1,46 @@
-# daily_sender.py
-# FINAL DAILY REMINDER SENDER — HTML IDENTICAL TO MANUAL REMINDER
-
+import traceback
 from sheet_reader import read_rows
 from logic_engine import process_sheet
-from router_email import build_email_html_from_engine_result
+from email_builder import build_email_html
 from email_sender import send_email
-import traceback
 
 
-def send_daily_reminder():
-    """
-    Runs every morning at 8 AM (Railway cron or external scheduler).
-    Generates DAILY RFQ REMINDER in FULL HTML format,
-    identical to the manual reminder email template.
-    """
+# ----------------------------------------------------
+# DAILY REMINDER ENTRYPOINT
+# This must run ONCE and exit immediately.
+# ----------------------------------------------------
+def run_daily_sender():
     try:
-        # 1) Read sheet
+        print("Daily sender started...")
+
+        # 1) Read all rows from Google Sheet
         rows = read_rows()
+        print(f"Loaded {len(rows)} rows")
 
-        # 2) Run logic engine
+        # 2) Process logic
         result = process_sheet(rows)
+        summary = result["summary"]
+        sections = result["sections"]
 
-        # 3) Build HTML email (SAME function used by manual reminder)
-        html_body = build_email_html_from_engine_result(result)
+        # 3) Build HTML
+        html = build_email_html(summary, sections)
+        print("HTML email generated")
 
-        # 4) Send email
-        send_result = send_email(
-            to="sales@ventilengineering.com",
-            subject="Daily RFQ Reminder — Level 50",
-            body=html_body,
-            is_html=True
+        # 4) Send the email
+        send_email(
+            subject="Daily RFQ Reminder",
+            html_content=html
         )
 
-        return {
-            "status": "success",
-            "email_status": send_result,
-            "summary": result.get("summary", {})
-        }
+        print("Daily sender completed successfully.")
 
     except Exception as e:
-        return {
-            "status": "error",
-            "exception": str(e),
-            "trace": traceback.format_exc()
-        }
+        print("ERROR in daily sender:", e)
+        traceback.print_exc()
+
+
+# ----------------------------------------------------
+# Ensure Railway Cron executes directly and exits.
+# ----------------------------------------------------
+if __name__ == "__main__":
+    run_daily_sender()
