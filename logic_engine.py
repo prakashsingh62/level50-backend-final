@@ -1,86 +1,68 @@
 # logic_engine.py
-# COMPLETE PATCHED VERSION (FINAL)
-
 from classify import classify_rows
 
-
-def normalize_sections_for_email(sections: dict) -> dict:
+def normalize_summary(summary):
     """
-    Guarantee consistent ordering and naming of sections for both
-    Daily and Manual Reminder emails.
+    Ensures summary dict always has identical keys for HTML.
+    Missing keys become empty lists.
     """
+    expected_keys = [
+        "high_priority",
+        "medium_priority",
+        "low_priority",
+        "vendor_pending",
+        "client_followup",
+        "overdue"
+    ]
 
-    return {
-        "HIGH": sections.get("HIGH", []),
-        "MEDIUM": sections.get("MEDIUM", []),
-        "LOW": sections.get("LOW", []),
+    normalized = {}
+    for key in expected_keys:
+        normalized[key] = summary.get(key, [])
 
-        # Vendor Pending may exist under 2 possible keys depending on logic engine version
-        "VENDOR_PENDING": sections.get(
-            "VENDOR_PENDING",
-            sections.get("VENDORS_NOT_RESPONDED", [])
-        ),
-
-        "QUOTATION_RECEIVED": sections.get("QUOTATION_RECEIVED", []),
-        "CLIENT_CLARIFICATIONS": sections.get("CLIENT_CLARIFICATIONS", []),
-
-        # Some older logic engines used POST_OFFER instead of POST_OFFER_QUERIES
-        "POST_OFFER_QUERIES": sections.get(
-            "POST_OFFER_QUERIES",
-            sections.get("POST_OFFER", [])
-        ),
-
-        "OVERDUE": sections.get("OVERDUE", []),
-    }
+    return normalized
 
 
-def normalize_summary(summary: dict) -> dict:
+def normalize_sections_for_email(sections):
     """
-    Guarantee summary keys always exist to avoid KeyError and 
-    ensure daily + manual emails stay identical.
+    Guarantees section order + formatting for identical HTML output.
     """
+    ordered_keys = [
+        "High Priority",
+        "Medium Priority",
+        "Low Priority",
+        "Vendor Pending",
+        "Client Follow-up",
+        "Overdue"
+    ]
 
-    return {
-        "HIGH": summary.get("HIGH", 0),
-        "MEDIUM": summary.get("MEDIUM", 0),
-        "LOW": summary.get("LOW", 0),
+    normalized = {}
+    for key in ordered_keys:
+        normalized[key] = sections.get(key, [])
 
-        "VENDOR_PENDING": summary.get(
-            "VENDOR_PENDING",
-            summary.get("VENDORS_NOT_RESPONDED", 0)
-        ),
-
-        "QUOTATION_RECEIVED": summary.get("QUOTATION_RECEIVED", 0),
-        "CLIENT_CLARIFICATIONS": summary.get("CLIENT_CLARIFICATIONS", 0),
-
-        "POST_OFFER_QUERIES": summary.get(
-            "POST_OFFER_QUERIES",
-            summary.get("POST_OFFER", 0)
-        ),
-
-        "OVERDUE": summary.get("OVERDUE", 0),
-    }
+    return normalized
 
 
 def process_sheet(rows):
     """
-    Main Logic Engine for Level-50/51.
-    Input: raw sheet rows list
-    Output: { summary, sections }
+    Main Level-50 Logic Engine
+    Step 1 → Classify rows using classify.py
+    Step 2 → Normalize keys for identical HTML output
+    Step 3 → Return standardized format for routers + email sender
     """
 
-    # Step 1 — Classify using your classify.py logic
+    # Step 1 — classify
     summary, sections = classify_rows(rows)
 
-    # Step 2 — Normalize keys so HTML output is always identical
+    # Step 2 — normalize for HTML
     summary = normalize_summary(summary)
     sections = normalize_sections_for_email(sections)
 
-    # Step 3 — Output is now standardized for email + router usage
+    # Step 3 — final output (FIXED BRACKET)
     return {
         "summary": summary,
         "sections": sections
-    
+    }
+
 
 def run_level50(rows):
     """
@@ -88,5 +70,3 @@ def run_level50(rows):
     Older routers expect run_level50() to exist.
     """
     return process_sheet(rows)
-    
-    
