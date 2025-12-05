@@ -1,12 +1,13 @@
 from fastapi import APIRouter
-from logic_engine import run_level50   # same folder import
+from logic_engine import process_sheet
 
 router = APIRouter()
 
-@router.post("/run")
-async def run_api(debug: bool = False):
-    """
-    Main trigger for Level-50 Automation
-    """
-    result = run_level50(debug=debug)
-    return result
+@router.post("/run-level50")
+def run_level50_api(payload: dict):
+    rows = payload.get("rows", [])
+    result = process_sheet(rows)
+    return {
+        "status": "success",
+        "result": result,
+    }
