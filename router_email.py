@@ -1,158 +1,44 @@
-from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+import os
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail, Email, To, Content
 
-from logic_engine import process_sheet
-from sheet_reader import read_rows
-from sheet_writer import write_updates
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
 
-from email_sender import send_email
-
-# ---------------------------------------------------------
-# Router initialization
-# ---------------------------------------------------------
-router = APIRouter()
-
-
-# ---------------------------------------------------------
-# HTML Email Template (Identical to Daily Reminder Format)
-# ---------------------------------------------------------
-def build_email_html_from_engine_result(result: dict) -> str:
+def send_email(to, subject, body, is_html=False):
     """
-    Build HTML email body identical to the Daily Reminder format.
+    Simple SendGrid email wrapper.
+    Works for BOTH manual reminder & daily reminder.
     """
-    html = []
-    html.append("""
-    <!doctype html>
-    <html>
-    <head>
-        <meta charset='utf-8'>
-        <meta name='viewport' content='width=device-width, initial-scale=1'>
-        <style>
-            body {font-family: Arial, Helvetica, sans-serif; color:#333; margin:0; padding:0;}
-            .container {max-width:900px; margin:0 auto; padding:20px;}
-            h1 {font-size:26px; margin-bottom:5px;}
-            h2 {font-size:20px; margin-top:5px; color:#444;}
-            .hr {border-top:1px solid #ddd; margin:20px 0;}
-            .summary-list {list-style:none; padding:0; margin:0 0 20px 0;}
-            .summary-list li {margin:6px 0; font-size:15px;}
-            .badge {display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:8px;}
-            .table {width:100%; border-collapse:collapse; margin-bottom:25px; font-size:14px;}
-            .table th {background:#f7f7f7; border:1px solid #ddd; padding:8px; font-weight:bold;}
-            .table td {border:1px solid #ddd; padding:8px;}
-            .section-title {font-size:18px; font-weight:700; margin:25px 0 8px 0;}
-        </style>
-    </head>
-    <body>
-    <div class="container">
-        <h1>Daily RFQ Reminder (Level-50 Smart Assistant)</h1>
-        <h2>Daily RFQ Summary</h2>
-    """)
 
-    summary = result.get("summary", {})
-    html.append("<ul class='summary-list'>")
+    if SENDGRID_API_KEY is None:
+        return {"error": "Missing SENDGRID_API_KEY"}
 
-    def li(color, label, key):
-        html.append(
-            f"<li><span class='badge' style='background:{color}'></span>{label}: {summary.get(key, 0)}</li>"
-        )
+    from_email = Email("rfq@ventilengineering.com")
 
-    li("#e74c3c", "High Priority", "HIGH")
-    li("#f39c12", "Medium Priority", "MEDIUM")
-    li("#2ecc71", "Low Priority", "LOW")
-    li("#8e44ad", "Vendors Not Responded", "VENDOR_PENDING")
-    li("#f1c40f", "Quotation Received", "QUOTATION_RECEIVED")
-    li("#3498db", "Client Clarifications", "CLIENT_CLARIFICATIONS")
-    li("#7f8c8d", "Post-Offer Client Queries", "POST_OFFER_QUERIES")
-    li("#2c3e50", "Overdue RFQs", "OVERDUE")
+    # If HTML → set content type accordingly
+    if is_html:
+        content = Content("text/html", body)
+    else:
+        content = Content("text/plain", body)
 
-    html.append("</ul><div class='hr'></div>")
+    message = Mail(
+        from_email=from_email,
+        to_emails=[to],
+        subject=subject,
+        plain_text_content=None,
+        html_content=body if is_html else None
+    )
 
-    # Build section tables
-    sections = result.get("sections", {})
-
-    def build_table(title, rows):
-        if not rows:
-            return
-        html.append(f"<div class='section-title'>{title}</div>")
-        html.append("""
-        <table class='table'>
-            <thead>
-                <tr>
-                    <th>RFQ No</th>
-                    <th>UID No</th>
-                    <th>Customer</th>
-                    <th>Due Date</th>
-                    <th>Days Overdue</th>
-                    <th>Next Step</th>
-                </tr>
-            </thead>
-            <tbody>
-        """)
-        for r in rows:
-            rfq = r.get("RFQ NO", r.get("RFQ", ""))
-            uid = r.get("UID NO", "")
-            customer = r.get("CUSTOMER NAME", r.get("Customer", ""))
-            due = r.get("DUE DATE", "")
-            days = r.get("DAYS OVERDUE", "")
-            next_step = r.get("NEXT STEP", "")
-            html.append(
-                f"<tr><td>{rfq}</td><td>{uid}</td><td>{customer}</td>"
-                f"<td>{due}</td><td>{days}</td><td>{next_step}</td></tr>"
-            )
-        html.append("</tbody></table>")
-
-    build_table("🔴 High Priority", sections.get("HIGH", []))
-    build_table("🟠 Medium Priority", sections.get("MEDIUM", []))
-    build_table("🟢 Low Priority", sections.get("LOW", []))
-    build_table("🟣 Vendor Pending", sections.get("VENDOR_PENDING", []))
-    build_table("🟡 Quotation Received", sections.get("QUOTATION_RECEIVED", []))
-    build_table("🔵 Client Clarifications", sections.get("CLIENT_CLARIFICATIONS", []))
-    build_table("🟤 Post-Offer Client Queries", sections.get("POST_OFFER_QUERIES", []))
-    build_table("⚫ Overdue RFQs", sections.get("OVERDUE", []))
-
-    html.append("""
-        <div class='hr'></div>
-        <p style='font-size:13px;color:#777;'>
-            This is an automated reminder email generated by the Level-50 RFQ Automation System.
-        </p>
-    </div>
-    </body>
-    </html>
-    """)
-
-    return "".join(html)
-
-
-# ---------------------------------------------------------
-# Manual Reminder Endpoint (HTML Version)
-# ---------------------------------------------------------
-@router.post("/manual-reminder")
-def manual_reminder():
     try:
-        # 1) Read sheet
-        raw_rows = read_rows()
-
-        # 2) Process RFQ logic engine
-        meta = process_sheet(raw_rows)
-
-        # 3) Generate HTML identical to daily reminder
-        html_body = build_email_html_from_engine_result(meta)
-
-        # 4) Send email with HTML flag
-        send_result = send_email(
-            to="sales@ventilengineering.com",
-            subject="Manual RFQ Reminder — Level 50",
-            body=html_body,
-            is_html=True
-        )
-
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
         return {
-            "status": "success",
-            "email_status": send_result
+            "status": "sent",
+            "code": response.status_code
         }
 
     except Exception as e:
-        return JSONResponse(
-            {"error": str(e)},
-            status_code=500
-        )
+        return {
+            "status": "error",
+            "message": str(e)
+        }
