@@ -1,4 +1,3 @@
-import os
 import json
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -9,17 +8,19 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 def load_service_account():
     """
     Handles both:
-    - dict (Railway auto-parsed)
-    - string (raw JSON)
+    - dict (Railway auto-parsed from JSON)
+    - string (raw JSON stored in variable)
     """
+    # If Railway already parsed JSON → dict
     if isinstance(CLIENT_SECRET_JSON, dict):
         return CLIENT_SECRET_JSON
 
+    # If string, try normal loads
     if isinstance(CLIENT_SECRET_JSON, str):
         try:
             return json.loads(CLIENT_SECRET_JSON)
         except Exception:
-            # If Railway escaped it incorrectly, try aggressive fix
+            # Fallback if escaped
             cleaned = CLIENT_SECRET_JSON.replace('\\"', '"')
             return json.loads(cleaned)
 
@@ -27,6 +28,9 @@ def load_service_account():
 
 
 def read_sheet():
+    """
+    Reads complete A:Z range and returns row dicts.
+    """
     service_info = load_service_account()
 
     credentials = service_account.Credentials.from_service_account_info(
@@ -44,8 +48,6 @@ def read_sheet():
     ).execute()
 
     values = result.get("values", [])
-
-    # Convert rows into dicts
     if not values:
         return []
 
@@ -53,16 +55,17 @@ def read_sheet():
     rows = []
 
     for row in values[1:]:
-        row_dict = {headers[i]: (row[i] if i < len(row) else "") for i in range(len(headers))}
+        row_dict = {
+            headers[i]: (row[i] if i < len(row) else "")
+            for i in range(len(headers))
+        }
         rows.append(row_dict)
 
     return rows
 
 
-# -----------------------------------------------------------
-# 🔥 BACKWARD COMPATIBILITY FIX
-# Older code still imports read_rows(), so we provide a wrapper
-# -----------------------------------------------------------
+# ---------------------------------------------------------
+# BACKWARD COMPATIBILITY (old code still imports read_rows)
+# ---------------------------------------------------------
 def read_rows():
-    """Old router compatibility — maps to read_sheet()."""
     return read_sheet()
