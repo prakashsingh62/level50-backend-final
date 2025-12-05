@@ -7,6 +7,7 @@ from email_sender import send_email
 def send_daily_email():
     rows = read_rows()
     result = run_level50(rows)
+    sections = result["sections"]
     html = build_email_content(sections)
 
     recipients = os.environ["EMAIL_RECIPIENTS"].split(",")
