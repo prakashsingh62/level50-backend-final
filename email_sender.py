@@ -1,34 +1,46 @@
 import os
 import sendgrid
-from sendgrid.helpers.mail import Mail, Email, To, Content
+from sendgrid.helpers.mail import Mail, Email, To, Content, ReplyTo
 
 
-def send_email(to, subject, body, is_html=False):
-    """
-    Send email using SendGrid with support for both plain text and HTML.
-    """
-
+def send_email(to, subject, body_html, is_html=False):
     sg = sendgrid.SendGridAPIClient(api_key=os.getenv("SENDGRID_API_KEY"))
 
-    # Select content type
-    if is_html:
-        content = Content("text/html", body)
-    else:
-        content = Content("text/plain", body)
+    # 1) Plain text fallback (massively improves inbox rate)
+    plain_fallback = "Your RFQ reminder summary is available. Please view HTML version."
 
-    # Build email structure
-    mail = Mail(
-        from_email=Email("sales@ventilengineering.com", "RFQ Automation System"),
+    # 2) Footer for compliance (required for inbox placement)
+    footer_html = """
+        <br><br>
+        <hr>
+        <p style="font-size:12px; color:#888;">
+            Ventil Engineering Pvt. Ltd.<br>
+            Automated RFQ Reminder System<br>
+            If you no longer want to receive reminder emails, reply STOP.
+        </p>
+    """
+
+    body_html = body_html + footer_html
+
+    # 3) Verified FROM address (SendGrid-owned domain)
+    verified_sender = "rfq-system@sendgrid.me"
+
+    message = Mail(
+        from_email=Email(verified_sender, "RFQ Automation System"),
         to_emails=To(to),
         subject=subject,
-        plain_text_content=None if is_html else body,
-        html_content=body if is_html else None
+        reply_to=ReplyTo("sales@ventilengineering.com")  # When someone replies → goes to sales email
     )
 
-    # Send the email
-    response = sg.client.mail.send.post(request_body=mail.get())
+    # Attach content properly
+    message.add_content(Content("text/plain", plain_fallback))
+    if is_html:
+        message.add_content(Content("text/html", body_html))
+    else:
+        message.add_content(Content("text/plain", body_html))
 
-    # Return response for debugging
+    response = sg.client.mail.send.post(request_body=message.get())
+
     return {
         "status_code": response.status_code,
         "body": str(response.body),
