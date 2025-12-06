@@ -1,6 +1,7 @@
 # logic_engine.py
 from classify import classify_rows
 
+
 def normalize_summary(summary):
     """
     Ensures summary dict always has identical keys for HTML.
@@ -44,7 +45,7 @@ def normalize_sections_for_email(sections):
 
 def process_sheet(rows):
     """
-    Main Level-50 Logic Engine
+    Main Level-51 Logic Engine
     Step 1 → Classify rows using classify.py
     Step 2 → Normalize keys for identical HTML output
     Step 3 → Return standardized format for routers + email sender
@@ -57,10 +58,17 @@ def process_sheet(rows):
     summary = normalize_summary(summary)
     sections = normalize_sections_for_email(sections)
 
-    # Step 3 — final output (FIXED BRACKET)
+    # --- Level-51 required placeholders ---
+    # Even if no autofix/alerts today, mail must not crash.
+    autofix = []   # Future: rows fixed by Level-51 engine
+    alerts = []    # Future: errors / warnings / critical flags
+
+    # Step 3 — final output
     return {
         "summary": summary,
-        "sections": sections
+        "sections": sections,
+        "autofix": autofix,
+        "alerts": alerts
     }
 
 
