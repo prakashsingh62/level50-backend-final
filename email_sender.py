@@ -18,7 +18,7 @@ def send_email(html, recipients):
     msg.attach(part)
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login("sales@ventilengineering.com", "your_app_password")
+        server.login("sales@ventilengineering.com", "YOUR_APP_PASSWORD")
         server.sendmail(msg["From"], recipients, msg.as_string())
 
-    return {"status": "sent"} 
+    return {"status": "sent"}
