@@ -1,36 +1,31 @@
 import os
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-
+import requests
 
 def send_email(html, recipients):
-    """
-    Send email using Brevo SMTP.
-    """
+    api_key = os.environ["BREVO_API_KEY"]
 
-    smtp_server = os.environ["BREVO_SMTP_SERVER"]
-    smtp_port = int(os.environ["BREVO_SMTP_PORT"])
-    smtp_login = os.environ["BREVO_SMTP_LOGIN"]
-    smtp_password = os.environ["BREVO_SMTP_PASSWORD"]
+    url = "https://api.brevo.com/v3/smtp/email"
 
-    sender = smtp_login  # Brevo: sender must be same as login ID
+    headers = {
+        "accept": "application/json",
+        "api-key": api_key,
+        "content-type": "application/json"
+    }
 
     for to_email in recipients:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = "Daily RFQ Reminder Report"
-        msg["From"] = sender
-        msg["To"] = to_email
+        data = {
+            "sender": {"name": "RFQ System", "email": "no-reply@ventilengineering.com"},
+            "to": [{"email": to_email}],
+            "subject": "Daily RFQ Report",
+            "htmlContent": html
+        }
 
-        msg.attach(MIMEText(html, "html"))
+        response = requests.post(url, json=data, headers=headers)
 
-        try:
-            with smtplib.SMTP(smtp_server, smtp_port) as server:
-                server.starttls()
-                server.login(smtp_login, smtp_password)
-                server.sendmail(sender, to_email, msg.as_string())
-
-        except Exception as e:
-            return {"status": "error", "detail": str(e)}
+        if response.status_code >= 300:
+            return {
+                "status": "error",
+                "detail": response.text
+            }
 
     return {"status": "sent", "recipients": recipients}
