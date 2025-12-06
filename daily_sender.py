@@ -7,16 +7,16 @@ from email_sender import send_email
 
 def send_daily_email():
     """
-    Level-51 Daily Report Mail:
-    - Summary
-    - Autofix actions (Level-51)
+    Sends FULL Level-51 Daily Report:
+    - Summary (High, Medium, Low etc.)
+    - Autofix actions
     - Alerts
     """
 
-    # Step 1: Read sheet
+    # Read rows from Google Sheet
     rows = read_rows()
 
-    # Step 2: Process logic engine
+    # Run Level-51 logic pipeline
     result = run_level50(rows)
 
     summary = result.get("summary", {})
@@ -24,16 +24,30 @@ def send_daily_email():
     autofix = result.get("autofix", [])
     alerts = result.get("alerts", [])
 
-    # Step 3: Build HTML
+    # Build final HTML mail
     html = build_email(summary, sections, autofix, alerts)
 
-    # Step 4: Send mail
+    # Daily recipients from ENV
     recipients = os.environ["EMAIL_RECIPIENTS"].split(",")
+
+    # Send mail using generic sender
     return send_email(html, recipients)
 
 
 def send_manual_reminder():
     """
-    Manual trigger → same report as daily mail.
+    Manual trigger API → same report, 
+    goes only to sales@ventilengineering.com.
     """
-    return send_daily_email()
+
+    rows = read_rows()
+    result = run_level50(rows)
+
+    summary = result.get("summary", {})
+    sections = result.get("sections", {})
+    autofix = result.get("autofix", [])
+    alerts = result.get("alerts", [])
+
+    html = build_email(summary, sections, autofix, alerts)
+
+    return send_email(html, ["sales@ventilengineering.com"])
