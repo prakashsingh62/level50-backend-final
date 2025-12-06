@@ -3,29 +3,26 @@ import requests
 
 def send_email(html, recipients):
     api_key = os.environ["BREVO_API_KEY"]
+    sender = {"email": os.environ["BREVO_FROM_EMAIL"]}
 
-    url = "https://api.brevo.com/v3/smtp/email"
-
-    headers = {
-        "accept": "application/json",
-        "api-key": api_key,
-        "content-type": "application/json"
+    data = {
+        "sender": sender,
+        "to": [{"email": r} for r in recipients],
+        "subject": "Level-50 Report",
+        "htmlContent": html
     }
 
-    for to_email in recipients:
-        data = {
-            "sender": {"name": "RFQ System", "email": "no-reply@ventilengineering.com"},
-            "to": [{"email": to_email}],
-            "subject": "Daily RFQ Report",
-            "htmlContent": html
+    res = requests.post(
+        "https://api.brevo.com/v3/smtp/email",
+        json=data,
+        headers={
+            "accept": "application/json",
+            "api-key": api_key,
+            "content-type": "application/json"
         }
+    )
 
-        response = requests.post(url, json=data, headers=headers)
+    if res.status_code >= 400:
+        return {"status": "error", "detail": res.text}
 
-        if response.status_code >= 300:
-            return {
-                "status": "error",
-                "detail": response.text
-            }
-
-    return {"status": "sent", "recipients": recipients}
+    return {"status": "sent", "detail": res.json()}
