@@ -2,7 +2,6 @@ import os
 from sheet_reader import read_rows
 from logic_engine import run_level50
 from email_builder import build_email
-from email_sender import send_email
 
 
 def send_daily_email():
@@ -13,10 +12,13 @@ def send_daily_email():
     - Alerts
     """
 
-    # Read rows from Google Sheet
+    # Late import to avoid circular import
+    from email_sender import send_email
+
+    # Read rows
     rows = read_rows()
 
-    # Run Level-51 logic pipeline
+    # Run logic pipeline
     result = run_level50(rows)
 
     summary = result.get("summary", {})
@@ -24,21 +26,23 @@ def send_daily_email():
     autofix = result.get("autofix", [])
     alerts = result.get("alerts", [])
 
-    # Build final HTML mail
+    # Build HTML
     html = build_email(summary, sections, autofix, alerts)
 
-    # Daily recipients from ENV
+    # Recipients from ENV
     recipients = os.environ["EMAIL_RECIPIENTS"].split(",")
 
-    # Send mail using generic sender
     return send_email(html, recipients)
 
 
 def send_manual_reminder():
     """
-    Manual trigger API → same report, 
-    goes only to sales@ventilengineering.com.
+    Manual trigger API → same report,
+    but ONLY to sales@ventilengineering.com.
     """
+
+    # Late import to avoid circular import
+    from email_sender import send_email
 
     rows = read_rows()
     result = run_level50(rows)
