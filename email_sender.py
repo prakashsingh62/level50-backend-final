@@ -21,4 +21,4 @@ def send_email(html, recipients):
         server.login("sales@ventilengineering.com", "your_app_password")
         server.sendmail(msg["From"], recipients, msg.as_string())
 
-    return {"status": "sent"}
+    return {"status": "sent"} 
