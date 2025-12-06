@@ -1,43 +1,24 @@
-import os
-from sheet_reader import read_rows
-from logic_engine import run_level50
-from email_builder import build_email
-from email_sender import send_email
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 
-def send_daily_email():
-    rows = read_rows()
-
-    # Level-50 logic output
-    result = run_level50(rows)
-    sections = result["sections"]
-
-    # No autofix + alerts for now (basic mode)
-    autofix = []
-    alerts = []
-
-    # Build final HTML
-    html = build_email(result["summary"], sections, autofix, alerts)
-
-    # Recipients
-    recipients = os.environ["EMAIL_RECIPIENTS"].split(",")
-
-    return send_email(html, recipients)
-
-
-def send_manual_reminder():
+def send_email(html, recipients):
     """
-    Sends email instantly to sales@ventilengineering.com only
-    (NOT the full daily mail recipients list)
+    Generic mail sender.
+    No imports from daily_sender to avoid circular import.
     """
-    rows = read_rows()
-    result = run_level50(rows)
-    sections = result["sections"]
 
-    # Basic placeholders
-    autofix = []
-    alerts = []
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "Level-51 RFQ Report"
+    msg["From"] = "sales@ventilengineering.com"
+    msg["To"] = ", ".join(recipients)
 
-    html = build_email(result["summary"], sections, autofix, alerts)
+    part = MIMEText(html, "html")
+    msg.attach(part)
 
-    return send_email(html, ["sales@ventilengineering.com"])
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login("sales@ventilengineering.com", "your_app_password")
+        server.sendmail(msg["From"], recipients, msg.as_string())
+
+    return {"status": "sent"}
