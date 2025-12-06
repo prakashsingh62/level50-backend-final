@@ -1,24 +1,36 @@
+import os
 import smtplib
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 
 def send_email(html, recipients):
     """
-    Generic mail sender.
-    No imports from daily_sender to avoid circular import.
+    Send email using Brevo SMTP.
     """
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Level-51 RFQ Report"
-    msg["From"] = "sales@ventilengineering.com"
-    msg["To"] = ", ".join(recipients)
+    smtp_server = os.environ["BREVO_SMTP_SERVER"]
+    smtp_port = int(os.environ["BREVO_SMTP_PORT"])
+    smtp_login = os.environ["BREVO_SMTP_LOGIN"]
+    smtp_password = os.environ["BREVO_SMTP_PASSWORD"]
 
-    part = MIMEText(html, "html")
-    msg.attach(part)
+    sender = smtp_login  # Brevo: sender must be same as login ID
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login("sales@ventilengineering.com", "YOUR_APP_PASSWORD")
-        server.sendmail(msg["From"], recipients, msg.as_string())
+    for to_email in recipients:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "Daily RFQ Reminder Report"
+        msg["From"] = sender
+        msg["To"] = to_email
 
-    return {"status": "sent"}
+        msg.attach(MIMEText(html, "html"))
+
+        try:
+            with smtplib.SMTP(smtp_server, smtp_port) as server:
+                server.starttls()
+                server.login(smtp_login, smtp_password)
+                server.sendmail(sender, to_email, msg.as_string())
+
+        except Exception as e:
+            return {"status": "error", "detail": str(e)}
+
+    return {"status": "sent", "recipients": recipients}
