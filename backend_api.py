@@ -26,7 +26,7 @@ def unique_values(rows, column):
 
 @router.get("/api/suggest/customers")
 async def suggest_customers(q: str = ""):
-    rows = read_sheet_data()
+    rows, _ = read_sheet()   # <-- FIXED
     all_values = unique_values(rows, "CUSTOMER NAME")
 
     if not q:
@@ -40,7 +40,7 @@ async def suggest_customers(q: str = ""):
 
 @router.get("/api/suggest/vendors")
 async def suggest_vendors(q: str = ""):
-    rows = read_sheet_data()
+    rows, _ = read_sheet()   # <-- FIXED
     all_values = unique_values(rows, "VENDOR")
 
     if not q:
@@ -54,7 +54,7 @@ async def suggest_vendors(q: str = ""):
 
 @router.get("/api/suggest/status")
 async def suggest_status(q: str = ""):
-    rows = read_sheet_data()
+    rows, _ = read_sheet()   # <-- FIXED
     all_values = unique_values(rows, "FINAL STATUS")
 
     if not q:
