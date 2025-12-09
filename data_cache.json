@@ -1,0 +1,33 @@
+import json
+import gspread
+from google.oauth2.service_account import Credentials
+
+# ------------------------------------------
+# GOOGLE SHEET CONFIG
+# ------------------------------------------
+SHEET_ID = "1hKMwlnN3GAE4dxVGvq2WHT2-Om9SJ3P91L8cxioAeoo"
+TAB_NAME = "RFQ TEST SHEET"
+
+# ------------------------------------------
+# GOOGLE AUTH (YOUR SERVICE ACCOUNT FILE)
+# ------------------------------------------
+creds = Credentials.from_service_account_file(
+    "service_account.json",   # <- rename if different
+    scopes=["https://www.googleapis.com/auth/spreadsheets"]
+)
+
+client = gspread.authorize(creds)
+
+# ------------------------------------------
+# READ SHEET DATA
+# ------------------------------------------
+sheet = client.open_by_key(SHEET_ID).worksheet(TAB_NAME)
+rows = sheet.get_all_records()
+
+# ------------------------------------------
+# SAVE TO JSON CACHE FILE
+# ------------------------------------------
+with open("data_cache.json", "w", encoding="utf-8") as f:
+    json.dump(rows, f, indent=2, ensure_ascii=False)
+
+print("data_cache.json generated successfully!")
