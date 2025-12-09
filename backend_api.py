@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from sheet_reader import read_sheet_data
+from sheet_reader import read_sheet
 
 router = APIRouter()
 
