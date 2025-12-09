@@ -20,9 +20,6 @@ app.add_middleware(
 from backend_api import router as backend_api_router
 app.include_router(backend_api_router)
 
-from email_reader import router as email_reader_router
-app.include_router(email_reader_router)
-
 from manual_reminder import router as manual_reminder_router
 app.include_router(manual_reminder_router)
 
