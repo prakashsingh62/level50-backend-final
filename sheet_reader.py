@@ -56,4 +56,5 @@ def read_sheet():
         row_dict = {headers[i]: (row[i] if i < len(row) else "") for i in range(len(headers))}
         rows.append(row_dict)
 
-    return rows
+    return rows, headers
+
