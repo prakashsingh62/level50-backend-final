@@ -4,7 +4,6 @@ google-auth
 google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
-google-auth-library
 requests
 jinja2
 python-dotenv
