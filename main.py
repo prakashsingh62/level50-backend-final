@@ -1,22 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Routers in root folder
-from run_router import router as run_router
-from router_test import router as test_router
+app = FastAPI()
 
-# ⭐ NEW — Auto-Suggest API Router
-from backend_api import router as suggest_router
-
-
-app = FastAPI(
-    title="Level-50 Automation Engine",
-    version="1.0.0",
-)
-
-# =====================
-#        CORS
-# =====================
+# ---------------------------
+# CORS
+# ---------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -25,16 +14,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# =====================
-#     URL MOUNTS
-# =====================
-app.include_router(run_router, prefix="", tags=["RUN"])
-app.include_router(test_router, prefix="/test", tags=["TEST"])
+# ---------------------------
+# Routers
+# ---------------------------
+from backend_api import router as backend_api_router
+app.include_router(backend_api_router)
 
-# ⭐ ADD THIS — Suggestion API mount
-app.include_router(suggest_router, prefix="", tags=["SUGGEST"])
+from email_reader import router as email_reader_router
+app.include_router(email_reader_router)
+
+from manual_reminder import router as manual_reminder_router
+app.include_router(manual_reminder_router)
+
+# ---------------------------
+# NEW: RFQ Search Router
+# ---------------------------
+from search_rfq import router as search_rfq_router
+app.include_router(search_rfq_router)
 
 
+# ---------------------------
+# Root
+# ---------------------------
 @app.get("/")
-async def root():
-    return {"status": "Level-50 backend active"}
+def root():
+    return {"status": "RFQ Automation Backend Running"}
