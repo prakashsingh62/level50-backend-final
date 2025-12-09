@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 # Routers in root folder
 from run_router import router as run_router
 from router_test import router as test_router
-from router_email import router as email_router
 
 # ⭐ NEW — Auto-Suggest API Router
 from backend_api import router as suggest_router
@@ -31,7 +30,6 @@ app.add_middleware(
 # =====================
 app.include_router(run_router, prefix="", tags=["RUN"])
 app.include_router(test_router, prefix="/test", tags=["TEST"])
-app.include_router(email_router, prefix="/email", tags=["EMAIL"])
 
 # ⭐ ADD THIS — Suggestion API mount
 app.include_router(suggest_router, prefix="", tags=["SUGGEST"])
