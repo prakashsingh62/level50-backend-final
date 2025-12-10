@@ -1,7 +1,6 @@
-# search_rfq.py
-
 import json
 import re
+from datetime import datetime
 from fastapi import APIRouter, Query
 
 router = APIRouter()
@@ -14,6 +13,31 @@ def load_cache():
         return json.load(f)
 
 RFQ_CACHE = load_cache()
+
+
+# ---------------------------------------
+# Priority Calculate (Based on DUE DATE)
+# ---------------------------------------
+def calculate_priority(row):
+    due = row.get("DUE DATE")
+    if not due:
+        return None
+
+    try:
+        # DD/MM/YYYY format
+        due_date = datetime.strptime(due, "%d/%m/%Y")
+    except:
+        return None
+
+    today = datetime.today()
+    days_left = (due_date - today).days
+
+    if days_left <= 2:
+        return "HIGH"
+    elif 3 <= days_left <= 4:
+        return "MEDIUM"
+    else:
+        return "LOW"
 
 
 # ---------------------------------------
@@ -66,8 +90,13 @@ def search_rfq(
     if vendor:
         results = [r for r in results if ci_contains(r.get("VENDOR"), vendor)]
 
+    # Priority filter (CALCULATED)
     if priority:
-        results = [r for r in results if str(r.get("PRIORITY")).lower() == priority.lower()]
+        results = [
+            r for r in results
+            if calculate_priority(r)
+            and calculate_priority(r).lower() == priority.lower()
+        ]
 
     if status:
         results = [r for r in results if ci_contains(r.get("STATUS"), status)]
