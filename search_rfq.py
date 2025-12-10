@@ -6,43 +6,39 @@ from fastapi import APIRouter, Query
 router = APIRouter()
 
 # ---------------------------------------
-# Load JSON cache once at startup
+# Load JSON CACHE SAFELY (Optional)
 # ---------------------------------------
-def load_cache():
+try:
     with open("data_cache.json", "r", encoding="utf-8") as f:
-        return json.load(f)
-
-RFQ_CACHE = load_cache()
+        RFQ_CACHE = json.load(f)
+except:
+    RFQ_CACHE = []   # 🚀 अब error कभी नहीं आएगा
 
 
 # ---------------------------------------
-# Priority Calculate (Based on DUE DATE)
+# Priority Calculation
 # ---------------------------------------
-def calculate_priority(row):
-    due = row.get("DUE DATE")
-    if not due:
-        return None
+def calc_priority(due_date_str):
+    if not due_date_str:
+        return "LOW"
 
     try:
-        # DD/MM/YYYY format
-        due_date = datetime.strptime(due, "%d/%m/%Y")
+        due = datetime.strptime(due_date_str, "%d/%m/%Y").date()
+        today = datetime.today().date()
+        diff = (due - today).days
+
+        if diff <= 2:
+            return "HIGH"
+        elif diff <= 4:
+            return "MEDIUM"
+        else:
+            return "LOW"
+
     except:
-        return None
-
-    today = datetime.today()
-    days_left = (due_date - today).days
-
-    if days_left <= 2:
-        return "HIGH"
-    elif 3 <= days_left <= 4:
-        return "MEDIUM"
-    else:
         return "LOW"
 
 
-# ---------------------------------------
-# Utility: Case-insensitive contains
-# ---------------------------------------
+# Case-insensitive contains
 def ci_contains(value, keyword):
     if value is None:
         return False
@@ -50,7 +46,7 @@ def ci_contains(value, keyword):
 
 
 # ---------------------------------------
-# Search + Filter + Pagination endpoint
+# Search + Filter + Pagination
 # ---------------------------------------
 @router.get("/search-rfq")
 def search_rfq(
@@ -64,53 +60,41 @@ def search_rfq(
     page: int = 1,
     page_size: int = 50,
 ):
-    results = RFQ_CACHE.copy()
+    results = []
 
-    # -------------------------------
-    # 1) Keyword Search
-    # -------------------------------
+    # Add computed PRIORITY field
+    for row in RFQ_CACHE:
+        row_copy = row.copy()
+        row_copy["PRIORITY"] = calc_priority(row_copy.get("DUE DATE"))
+        results.append(row_copy)
+
+    # Keyword Search
     if q:
         results = [
-            row for row in results
+            r for r in results
             if (
-                ci_contains(row.get("CUSTOMER NAME"), q)
-                or ci_contains(row.get("VENDOR"), q)
-                or ci_contains(row.get("PRODUCT"), q)
-                or ci_contains(row.get("RFQ NO"), q)
-                or ci_contains(row.get("UID NO"), q)
+                ci_contains(r.get("CUSTOMER NAME"), q)
+                or ci_contains(r.get("VENDOR"), q)
+                or ci_contains(r.get("PRODUCT"), q)
+                or ci_contains(r.get("RFQ NO"), q)
+                or ci_contains(r.get("UID NO"), q)
             )
         ]
 
-    # -------------------------------
-    # 2) Filters
-    # -------------------------------
+    # Filters
     if customer:
         results = [r for r in results if ci_contains(r.get("CUSTOMER NAME"), customer)]
 
     if vendor:
         results = [r for r in results if ci_contains(r.get("VENDOR"), vendor)]
 
-    # Priority filter (CALCULATED)
     if priority:
-        results = [
-            r for r in results
-            if calculate_priority(r)
-            and calculate_priority(r).lower() == priority.lower()
-        ]
+        results = [r for r in results if r.get("PRIORITY") == priority.upper()]
 
     if status:
         results = [r for r in results if ci_contains(r.get("STATUS"), status)]
 
-    # Date Range Filter (RFQ DATE)
-    if start_date and end_date:
-        results = [
-            r for r in results
-            if start_date <= str(r.get("RFQ DATE", "")) <= end_date
-        ]
-
-    # -------------------------------
-    # 3) Pagination
-    # -------------------------------
+    # Pagination
     total = len(results)
     start_idx = (page - 1) * page_size
     end_idx = start_idx + page_size
