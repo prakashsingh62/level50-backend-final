@@ -7,11 +7,18 @@ from fastapi import APIRouter, Query
 router = APIRouter()
 
 # ---------------------------------------
-# Load JSON cache once at startup
+# Safe Cache Loader (no crash on server)
 # ---------------------------------------
 def load_cache():
-    with open("data_cache.json", "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open("data_cache.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print("WARNING: data_cache.json not found. Using empty cache.")
+        return []   # Prevent Railway crash
+    except Exception as e:
+        print(f"ERROR loading cache: {e}")
+        return []   # Failsafe
 
 RFQ_CACHE = load_cache()
 
