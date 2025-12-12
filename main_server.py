@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from retry_queue.retry_queue_manager import retry_worker
 
 # Routers
 from run_router import router as run_router
@@ -7,6 +8,10 @@ from router_email import router as email_router
 from router_test import router as test_router
 
 app = FastAPI(title="Level-50 Backend")
+
+@app.get("/retry-queue-run")
+def retry_queue_run():
+    return retry_worker()
 
 # CORS
 app.add_middleware(

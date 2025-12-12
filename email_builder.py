@@ -1,79 +1,117 @@
-import datetime
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
-def build_email_html(data):
+# -------------------------------------------------------------------
+# LEVEL-70 EMAIL BUILDER WITH CONFIRMATION GATE
+# -------------------------------------------------------------------
+# This file has TWO responsibilities:
+#
+# 1) prepare_email(payload)  → ONLY prepares email (does NOT send)
+# 2) send_email(prepared)    → Sends ONLY after user confirms "SEND NOW"
+#
+# No email is ever auto-sent. Full control stays with user.
+# -------------------------------------------------------------------
+
+
+# -------------------------------------------------------------------
+# PREPARE EMAIL (SAFE MODE)
+# -------------------------------------------------------------------
+
+def prepare_email(mail_payload: dict):
     """
-    Build complete HTML email for Level-50 Reminder.
-    'data' is the dict returned from logic_engine.run_level50()
+    mail_payload = {
+        "to": "...",
+        "subject": "...",
+        "body": "...",
+        "rfq": "123",
+        "uid": "456"
+    }
+
+    RETURNS:
+    {
+        "status": "awaiting_confirmation",
+        "email_ready": True,
+        "payload": { ... }   <-- used later by send_email()
+    }
     """
 
-    today = datetime.date.today().strftime("%d-%b-%Y")
+    required_fields = ["to", "subject", "body"]
 
-    html = f"""
-    <html>
-    <head>
-        <style>
-            body {{ font-family: Arial, sans-serif; font-size: 14px; }}
-            table {{ border-collapse: collapse; width: 100%; }}
-            th, td {{ padding: 6px; border: 1px solid #ccc; }}
-            .section-title {{ font-size: 18px; margin-top: 20px; font-weight: bold; }}
-        </style>
-    </head>
-    <body>
+    for f in required_fields:
+        if f not in mail_payload or not mail_payload[f]:
+            return {
+                "status": "error",
+                "email_ready": False,
+                "error": f"Missing field: {f}",
+                "payload": {}
+            }
 
-    <h2>Daily RFQ Reminder — {today}</h2>
+    # DO NOT SEND — JUST PREPARE
+    return {
+        "status": "awaiting_confirmation",
+        "email_ready": True,
+        "payload": mail_payload
+    }
 
-    <h3>Summary</h3>
-    <p>Total RFQs: {data.get('total', 0)}</p>
 
-    <ul>
-        <li>High Priority: {len(data.get('high', []))}</li>
-        <li>Medium Priority: {len(data.get('medium', []))}</li>
-        <li>Low Priority: {len(data.get('low', []))}</li>
-        <li>Vendor Pending: {len(data.get('vendor_pending', []))}</li>
-        <li>Clarification: {len(data.get('clarification', []))}</li>
-        <li>Overdue: {len(data.get('overdue', []))}</li>
-    </ul>
+# -------------------------------------------------------------------
+# SEND EMAIL (ONLY AFTER USER CONFIRMATION)
+# -------------------------------------------------------------------
 
-    <hr>
+def send_email(prepared_email: dict, smtp_config: dict):
+    """
+    prepared_email = {
+        "to": "...",
+        "subject": "...",
+        "body": "...",
+        "rfq": "...",
+        "uid": "..."
+    }
+
+    smtp_config = {
+        "server": "...",
+        "port": 587,
+        "username": "...",
+        "password": "..."
+    }
+
+    This function sends email ONLY after user says:
+        → "SEND NOW"
     """
 
-    # ---------- TABLE BUILDER ----------
-    def section_table(title, rows):
-        if not rows:
-            return ""
+    to_addr = prepared_email.get("to", "")
+    subject = prepared_email.get("subject", "")
+    body = prepared_email.get("body", "")
 
-        table = f"""<div class="section-title">{title}</div>
-        <table>
-            <tr>
-                <th>RFQ No</th>
-                <th>UID</th>
-                <th>Customer</th>
-                <th>Due Date</th>
-                <th>Next Step</th>
-            </tr>
-        """
+    if not to_addr:
+        return {
+            "status": "error",
+            "error": "Missing recipient email address"
+        }
 
-        for r in rows:
-            table += f"""
-            <tr>
-                <td>{r.get('RFQ NO')}</td>
-                <td>{r.get('UID')}</td>
-                <td>{r.get('CUSTOMER')}</td>
-                <td>{r.get('DUE')}</td>
-                <td>{r.get('NEXT')}</td>
-            </tr>
-            """
+    msg = MIMEMultipart()
+    msg["From"] = smtp_config["username"]
+    msg["To"] = to_addr
+    msg["Subject"] = subject
 
-        table += "</table>"
-        return table
+    msg.attach(MIMEText(body, "plain"))
 
-    # Add all sections
-    html += section_table("High Priority", data.get("high", []))
-    html += section_table("Medium Priority", data.get("medium", []))
-    html += section_table("Low Priority", data.get("low", []))
-    html += section_table("Vendor Pending", data.get("vendor_pending", []))
-    html += section_table("Clarification", data.get("clarification", []))
-    html += section_table("Overdue", data.get("overdue", []))
+    try:
+        server = smtplib.SMTP(smtp_config["server"], smtp_config["port"])
+        server.starttls()
+        server.login(smtp_config["username"], smtp_config["password"])
+        server.sendmail(smtp_config["username"], to_addr, msg.as_string())
+        server.quit()
 
-    html += "</body></html>"
-    return html
+        return {
+            "status": "sent",
+            "to": to_addr,
+            "subject": subject
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }

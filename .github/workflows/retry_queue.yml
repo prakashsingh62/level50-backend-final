@@ -1,0 +1,18 @@
+name: Retry Queue Runner
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"     # Runs every 5 minutes
+  workflow_dispatch: {}        # Allow manual trigger
+
+jobs:
+  run-retry-queue:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Call Retry Queue Endpoint
+        run: |
+          curl -X GET "https://level50-backend-final-production-012c.up.railway.app/retry-queue-run" \
+          --max-time 30 || echo "Retry endpoint failed (temporary issue)"
+          echo "Retry queue triggered at $(date)"
+
