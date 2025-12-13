@@ -1,1 +1,16 @@
+# Secrets
+.env
 client_secret.json
+
+# Runtime / generated
+__pycache__/
+*.pyc
+data_cache.json
+reports/
+
+# Virtual env
+venv/
+
+# OS / Editor
+.vscode/
+.DS_Store

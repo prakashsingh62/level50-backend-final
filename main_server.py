@@ -1,33 +1,87 @@
+# ------------------------------------------------------------
+# MAIN FASTAPI SERVER  (SAFE + CLEAN + HEALTH ENDPOINT)
+# ------------------------------------------------------------
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from retry_queue.retry_queue_manager import retry_worker
 
-# Routers
-from run_router import router as run_router
-from router_email import router as email_router
-from router_test import router as test_router
+# Level-70 core imports
+from pipeline_engine import Level70Pipeline, apply_approved_update
 
-app = FastAPI(title="Level-50 Backend")
+# Heartbeat & Auto-Recovery (Infinity Pack)
+from utils.heartbeat import HeartbeatMonitor
 
-@app.get("/retry-queue-run")
-def retry_queue_run():
-    return retry_worker()
+# ------------------------------------------------------------
+# APP INITIALIZATION
+# ------------------------------------------------------------
 
-# CORS
+app = FastAPI()
+
+# Allow frontend (React UI) & local/dev access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],          # keep open for now
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Register Routers
-app.include_router(test_router)
-app.include_router(email_router)
-app.include_router(run_router)
+# Initialize Level-70 pipeline
+pipeline = Level70Pipeline()
+
+# Start 24/7 Heartbeat Monitor (Infinity Pack-2)
+heartbeat = HeartbeatMonitor()
+heartbeat.start()
 
 
+# ------------------------------------------------------------
+# HEALTH ENDPOINT (REQUIRED BY HEARTBEAT MONITOR)
+# ------------------------------------------------------------
 @app.get("/health")
-async def health():
-    return {"status": "ok", "service": "Level-50 backend running"}
+def health_check():
+    """
+    This endpoint is pinged every 30 seconds by HeartbeatMonitor.
+    Must ALWAYS return {"status": "ok"} if backend is alive.
+    """
+    return {"status": "ok"}
+
+
+# ------------------------------------------------------------
+# LEVEL-70: MAIN PIPELINE EXECUTION ENDPOINT
+# (Email → AI → Matching → Preview)
+# ------------------------------------------------------------
+@app.post("/run-pipeline")
+def run_pipeline_api(payload: dict):
+    """
+    Receives email_data from AI preprocessor.
+    Returns:
+        - no_match
+        - vendor_query_detected
+        - approval_required
+    """
+    result = pipeline.run(payload)
+    return result
+
+
+# ------------------------------------------------------------
+# LEVEL-70: APPROVAL EXECUTION ENDPOINT
+# (User clicks YES on UI)
+# ------------------------------------------------------------
+@app.post("/apply-update")
+def apply_update_api(data: dict):
+    """
+    React UI calls this when human approves update.
+    """
+    row = data.get("row")
+    ai_output = data.get("ai_output", {})
+
+    result = apply_approved_update(row, ai_output)
+    return result
+
+
+# ------------------------------------------------------------
+# ROOT TEST ENDPOINT (Optional)
+# ------------------------------------------------------------
+@app.get("/")
+def home():
+    return {"message": "Level-70 Backend Running"}
