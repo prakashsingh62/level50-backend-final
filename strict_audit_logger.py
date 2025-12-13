@@ -1,6 +1,6 @@
 # =========================================
 # strict_audit_logger.py
-# Level-80 Audit → Google Sheet (FINAL FIXED)
+# Level-80 Audit → Google Sheet (FINAL / STABLE)
 # =========================================
 
 import os
@@ -33,21 +33,18 @@ def _now_ist():
 
 
 # -------------------------------------------------
-# GOOGLE CREDS
+# GOOGLE AUTH
 # -------------------------------------------------
 def _load_credentials():
     if not CLIENT_SECRET_JSON:
-        raise RuntimeError("CLIENT_SECRET_JSON missing in env")
+        raise RuntimeError("CLIENT_SECRET_JSON missing")
 
     data = json.loads(CLIENT_SECRET_JSON)
-    return Credentials.from_service_account_info(
-        data,
-        scopes=SCOPES
-    )
+    return Credentials.from_service_account_info(data, scopes=SCOPES)
 
 
 # -------------------------------------------------
-# APPEND ROW TO AUDIT SHEET
+# APPEND ROW
 # -------------------------------------------------
 def _append_row(values: list):
     creds = _load_credentials()
@@ -60,53 +57,49 @@ def _append_row(values: list):
         range=f"{TAB_NAME}!A1",
         valueInputOption="USER_ENTERED",
         insertDataOption="INSERT_ROWS",
-        body=body
+        body=body,
     ).execute()
 
 
 # -------------------------------------------------
-# CORE AUDIT LOGGER
+# CORE LOGGER
 # -------------------------------------------------
-def log_post_update_snapshot(
-    rows_written: int,
-    affected_rows: list,
-    updater: str
-):
+def _log_post_update(rows_written, affected_rows, updater, event_type="POST_UPDATE"):
     _append_row([
-        _now_ist(),                    # timestamp
-        "POST_UPDATE",                 # status
-        rows_written,                  # rows_written
-        json.dumps(affected_rows),     # affected_rows
-        updater,                       # updater
-        "",                            # error_type
-        "",                            # error_message
-        0,                             # retry_count
-        "OK"                           # remarks
+        _now_ist(),
+        "",                     # RFQ NO (future use)
+        "",                     # UID (future use)
+        event_type,
+        "SUCCESS",
+        rows_written,
+        updater,
+        f"Rows updated: {affected_rows}",
     ])
 
 
 # -------------------------------------------------
-# STRICT MODE ENTRY POINT (IMPORTANT)
+# STRICT MODE ENTRY POINT (DO NOT CHANGE NAME)
 # -------------------------------------------------
-def write_audit(
-    *,
-    event_type=None,
-    rows_written=0,
-    affected_rows=None,
-    updater="SYSTEM",
-    **kwargs
-):
+def write_audit(**payload):
     """
-    SAFE entry point.
-    Accepts ANY keyword args from strict_mode_kernel.
-    Never crashes on extra params.
+    SAFE ENTRY POINT
+    Accepts ANY future keys without crashing.
+
+    Known keys:
+    - rows_written
+    - affected_rows
+    - updater
+    - event_type
     """
 
-    if affected_rows is None:
-        affected_rows = []
+    rows_written = payload.get("rows_written", 0)
+    affected_rows = payload.get("affected_rows", [])
+    updater = payload.get("updater", "SYSTEM")
+    event_type = payload.get("event_type", "POST_UPDATE")
 
-    log_post_update_snapshot(
+    _log_post_update(
         rows_written=rows_written,
         affected_rows=affected_rows,
-        updater=updater
+        updater=updater,
+        event_type=event_type,
     )
