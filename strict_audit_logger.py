@@ -64,3 +64,23 @@ def log_post_update_snapshot(rows_written: int, affected_rows: list, updater: st
         updater,
         f"Rows updated: {affected_rows}",
     ])
+
+# -------------------------------------------------
+# STRICT MODE ENTRY POINT (REQUIRED)
+# -------------------------------------------------
+def write_audit(payload: dict):
+    """
+    payload keys expected:
+    - rows_written
+    - affected_rows
+    - updater
+    """
+    rows_written = payload.get("rows_written", 0)
+    affected_rows = payload.get("affected_rows", [])
+    updater = payload.get("updater", "SYSTEM")
+
+    log_post_update_snapshot(
+        rows_written=rows_written,
+        affected_rows=affected_rows,
+        updater=updater
+    )
