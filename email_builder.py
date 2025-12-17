@@ -1,117 +1,65 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-
-# -------------------------------------------------------------------
-# LEVEL-70 EMAIL BUILDER WITH CONFIRMATION GATE
-# -------------------------------------------------------------------
-# This file has TWO responsibilities:
-#
-# 1) prepare_email(payload)  → ONLY prepares email (does NOT send)
-# 2) send_email(prepared)    → Sends ONLY after user confirms "SEND NOW"
-#
-# No email is ever auto-sent. Full control stays with user.
-# -------------------------------------------------------------------
+import os
+import json
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 
 
-# -------------------------------------------------------------------
-# PREPARE EMAIL (SAFE MODE)
-# -------------------------------------------------------------------
+SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
-def prepare_email(mail_payload: dict):
+ADMIN_USER = os.getenv("GMAIL_ADMIN_USER")  # eg: sales@ventilengineering.com
+CLIENT_SECRET_JSON = os.getenv("CLIENT_SECRET_JSON")
+
+
+def _get_gmail_service():
+    if not CLIENT_SECRET_JSON:
+        raise RuntimeError("CLIENT_SECRET_JSON missing")
+
+    info = json.loads(CLIENT_SECRET_JSON)
+
+    creds = service_account.Credentials.from_service_account_info(
+        info,
+        scopes=SCOPES,
+        subject=ADMIN_USER  # 👈 DOMAIN WIDE DELEGATION
+    )
+
+    return build("gmail", "v1", credentials=creds)
+
+
+def send_vendor_email(rfq: dict):
     """
-    mail_payload = {
-        "to": "...",
-        "subject": "...",
-        "body": "...",
-        "rfq": "123",
-        "uid": "456"
-    }
-
-    RETURNS:
-    {
-        "status": "awaiting_confirmation",
-        "email_ready": True,
-        "payload": { ... }   <-- used later by send_email()
-    }
+    Gmail API based vendor email sender
+    MUST exist for pipeline_engine import
     """
 
-    required_fields = ["to", "subject", "body"]
+    vendor_email = rfq.get("vendor_email")
+    if not vendor_email:
+        return "NO_VENDOR_EMAIL"
 
-    for f in required_fields:
-        if f not in mail_payload or not mail_payload[f]:
-            return {
-                "status": "error",
-                "email_ready": False,
-                "error": f"Missing field: {f}",
-                "payload": {}
-            }
+    subject = f"RFQ Follow-up | {rfq.get('rfq_no')}"
+    body = f"""
+RFQ No : {rfq.get('rfq_no')}
+UID    : {rfq.get('uid')}
+Customer: {rfq.get('customer')}
 
-    # DO NOT SEND — JUST PREPARE
-    return {
-        "status": "awaiting_confirmation",
-        "email_ready": True,
-        "payload": mail_payload
-    }
+Please share your quotation / update.
+"""
 
+    message = f"""To: {vendor_email}
+Subject: {subject}
 
-# -------------------------------------------------------------------
-# SEND EMAIL (ONLY AFTER USER CONFIRMATION)
-# -------------------------------------------------------------------
+{body}
+"""
 
-def send_email(prepared_email: dict, smtp_config: dict):
-    """
-    prepared_email = {
-        "to": "...",
-        "subject": "...",
-        "body": "...",
-        "rfq": "...",
-        "uid": "..."
-    }
+    raw = (
+        message
+        .encode("utf-8")
+        .decode("utf-8")
+    )
 
-    smtp_config = {
-        "server": "...",
-        "port": 587,
-        "username": "...",
-        "password": "..."
-    }
+    service = _get_gmail_service()
+    service.users().messages().send(
+        userId="me",
+        body={"raw": raw}
+    ).execute()
 
-    This function sends email ONLY after user says:
-        → "SEND NOW"
-    """
-
-    to_addr = prepared_email.get("to", "")
-    subject = prepared_email.get("subject", "")
-    body = prepared_email.get("body", "")
-
-    if not to_addr:
-        return {
-            "status": "error",
-            "error": "Missing recipient email address"
-        }
-
-    msg = MIMEMultipart()
-    msg["From"] = smtp_config["username"]
-    msg["To"] = to_addr
-    msg["Subject"] = subject
-
-    msg.attach(MIMEText(body, "plain"))
-
-    try:
-        server = smtplib.SMTP(smtp_config["server"], smtp_config["port"])
-        server.starttls()
-        server.login(smtp_config["username"], smtp_config["password"])
-        server.sendmail(smtp_config["username"], to_addr, msg.as_string())
-        server.quit()
-
-        return {
-            "status": "sent",
-            "to": to_addr,
-            "subject": subject
-        }
-
-    except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e)
-        }
+    return "MAIL_SENT"
