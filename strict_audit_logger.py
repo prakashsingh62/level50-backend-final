@@ -1,58 +1,39 @@
-# ------------------------------------------------------------
-# STRICT AUDIT LOGGER — LEVEL-80 COMPATIBLE
-# ------------------------------------------------------------
+def log_audit_event(
+    timestamp,
+    run_id,
+    status,
+    remarks="",
+    error_type="",
+    error_message="",
+    retry_count="",
+    updater="",
+    rows_written=None,
 
-import json
-import datetime
-import threading
-
-_AUDIT_LOCK = threading.Lock()
-_AUDIT_LOG_FILE = "strict_audit.log"
-
-
-def _write_log(entry: dict):
-    with _AUDIT_LOCK:
-        with open(_AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-
-
-def write_audit(
-    actor: str,
-    action: str,
-    entity_type: str,
-    entity_id: str,
-    before=None,
-    after=None,
+    # 🔥 RFQ TRACE (OPTIONAL)
+    rfq_no=None,
+    uid_no=None,
+    customer=None,
+    vendor=None,
+    step=None
 ):
-    entry = {
-        "timestamp": datetime.datetime.utcnow().isoformat(),
-        "actor": actor,
-        "action": action,
-        "entity_type": entity_type,
-        "entity_id": entity_id,
-        "before": before,
-        "after": after,
-    }
-    _write_log(entry)
-
-
-# ------------------------------------------------------------
-# 🔒 REQUIRED BY pipeline_engine.py
-# ------------------------------------------------------------
-def log_post_update_snapshot(
-    rows_written: int,
-    affected_rows: list,
-    updater: str,
-):
-    """
-    Level-80 Strict Mode post-update snapshot.
-    REQUIRED function — do not remove.
-    """
-    entry = {
-        "timestamp": datetime.datetime.utcnow().isoformat(),
-        "type": "POST_UPDATE_SNAPSHOT",
-        "rows_written": rows_written,
-        "affected_rows": affected_rows,
+    record = {
+        "timestamp": timestamp,
+        "run_id": run_id,
+        "status": status,
+        "remarks": remarks,
+        "error_type": error_type,
+        "error_message": error_message,
+        "retry_count": retry_count,
         "updater": updater,
+        "rows_written": rows_written or [],
+
+        # 🔍 RFQ CONTEXT
+        "rfq_no": rfq_no,
+        "uid_no": uid_no,
+        "customer": customer,
+        "vendor": vendor,
+        "step": step,
     }
-    _write_log(entry)
+
+    from logger import write_audit_log
+    write_audit_log(record)

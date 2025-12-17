@@ -1,69 +1,33 @@
-# =========================================
-# audit_report_api.py
-# Level-80 Audit Report API (READ ONLY)
-# =========================================
+from fastapi import APIRouter, Query
+from sheet_reader import read_audit_report_sheet
 
-import os
-import json
-from fastapi import APIRouter
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from dotenv import load_dotenv
+router = APIRouter()
 
-load_dotenv()
-
-router = APIRouter(
-    prefix="/api/audit",
-    tags=["Audit Report"]
-)
-
-# -------------------------------------------------
-# ENV
-# -------------------------------------------------
-SHEET_ID = os.getenv("PROD_SHEET_ID")
-TAB_NAME = os.getenv("PROD_TAB")
-CLIENT_SECRET_JSON = os.getenv("CLIENT_SECRET_JSON")
-
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-
-
-def _get_service():
-    data = json.loads(CLIENT_SECRET_JSON)
-    creds = Credentials.from_service_account_info(data, scopes=SCOPES)
-    return build("sheets", "v4", credentials=creds)
-
-
-@router.get("/report")
-def get_audit_report(limit: int = 100):
+@router.get("/api/audit/report")
+def get_audit_report(
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=1, le=200)
+):
     """
-    Returns last N audit rows (latest first)
+    Server-side pagination enabled.
+    Pagination is OPTIONAL (backward compatible).
     """
-    service = _get_service()
 
-    result = service.spreadsheets().values().get(
-        spreadsheetId=SHEET_ID,
-        range=f"{TAB_NAME}!A1:Z"
-    ).execute()
+    # Existing logic — DO NOT CHANGE SOURCE
+    rows = read_audit_report_sheet()  # must return list[dict]
 
-    rows = result.get("values", [])
+    if not isinstance(rows, list):
+        rows = []
 
-    if not rows:
-        return {"rows": []}
+    total = len(rows)
 
-    header = rows[0]
-    data = rows[1:]
-
-    data.reverse()
-    data = data[:limit]
-
-    output = []
-    for r in data:
-        row = {}
-        for i, col in enumerate(header):
-            row[col] = r[i] if i < len(r) else ""
-        output.append(row)
+    start = (page - 1) * limit
+    end = start + limit
 
     return {
-        "count": len(output),
-        "rows": output
+        "rows": rows[start:end],
+        "page": page,
+        "limit": limit,
+        "total": total,
+        "total_pages": (total + limit - 1) // limit
     }
