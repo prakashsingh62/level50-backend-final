@@ -1,60 +1,59 @@
 import os
 import json
-from google.oauth2 import service_account
+from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-from config import CLIENT_SECRET_JSON, PROD_SHEET_ID, PROD_TAB
+from dotenv import load_dotenv
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+load_dotenv()
 
-def load_service_account():
-    """
-    Handles both:
-    - dict (Railway auto-parsed)
-    - string (raw JSON)
-    """
-    if isinstance(CLIENT_SECRET_JSON, dict):
-        return CLIENT_SECRET_JSON
+SHEET_ID = os.getenv("PROD_SHEET_ID")
+RFQ_TAB = os.getenv("PROD_RFQ_TAB")  # RFQ data tab name
 
-    if isinstance(CLIENT_SECRET_JSON, str):
-        try:
-            return json.loads(CLIENT_SECRET_JSON)
-        except Exception:
-            # If Railway escaped it incorrectly, try aggressive fix
-            cleaned = CLIENT_SECRET_JSON.replace('\\"', '"')
-            return json.loads(cleaned)
-
-    raise ValueError("Invalid CLIENT_SECRET_JSON format")
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 
-def read_sheet():
-    service_info = load_service_account()
+def _get_service():
+    service_json = os.getenv("CLIENT_SECRET_JSON")
+    if not service_json:
+        raise RuntimeError("CLIENT_SECRET_JSON missing in env")
 
-    credentials = service_account.Credentials.from_service_account_info(
-        service_info,
+    creds = Credentials.from_service_account_info(
+        json.loads(service_json),
         scopes=SCOPES
     )
+    return build("sheets", "v4", credentials=creds)
 
-    service = build("sheets", "v4", credentials=credentials)
-    sheet = service.spreadsheets()
-    range_name = f"{PROD_TAB}!A:Z"
 
-    result = sheet.values().get(
-        spreadsheetId=PROD_SHEET_ID,
-        range=range_name
+# =====================================================
+# ✅ THIS IS WHAT PIPELINE EXPECTS
+# =====================================================
+def read_rfqs():
+    """
+    Reads RFQs from Google Sheet and returns list of dicts
+    """
+    service = _get_service()
+
+    result = service.spreadsheets().values().get(
+        spreadsheetId=SHEET_ID,
+        range=RFQ_TAB
     ).execute()
 
-    values = result.get("values", [])
-
-    # Convert rows into dicts
-    if not values:
+    rows = result.get("values", [])
+    if not rows or len(rows) < 2:
         return []
 
-    headers = values[0]
-    rows = []
+    headers = rows[0]
+    data_rows = rows[1:]
 
-    for row in values[1:]:
-        row_dict = {headers[i]: (row[i] if i < len(row) else "") for i in range(len(headers))}
-        rows.append(row_dict)
+    rfqs = []
+    for row in data_rows:
+        rfq = dict(zip(headers, row))
+        rfqs.append({
+            "rfq_no": rfq.get("RFQ NO"),
+            "uid": rfq.get("UID NO"),
+            "customer": rfq.get("CUSTOMER"),
+            "vendor": rfq.get("VENDOR"),
+            "send_mail": rfq.get("SEND MAIL") == "YES"
+        })
 
-    return rows, headers
-
+    return rfqs
