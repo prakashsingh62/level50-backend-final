@@ -1,34 +1,23 @@
 import logging
-import os
-from datetime import datetime, timedelta, timezone
+import sys
 
-# IST timezone object
-IST = timezone(timedelta(hours=5, minutes=30))
+_LOGGERS = {}
 
-class ISTFormatter(logging.Formatter):
-    """Force timestamps to IST regardless of container timezone."""
-    def formatTime(self, record, datefmt=None):
-        dt = datetime.fromtimestamp(record.created, IST)
-        if datefmt:
-            return dt.strftime(datefmt)
-        return dt.strftime("%Y-%m-%d %H:%M:%S")
+def get_logger(name: str):
+    if name in _LOGGERS:
+        return _LOGGERS[name]
 
-def get_logger():
-    logger = logging.getLogger("L50")
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
 
-    # Prevent duplicate handlers
     if not logger.handlers:
-        h = logging.StreamHandler()
+        handler = logging.StreamHandler(sys.stdout)
+        formatter = logging.Formatter(
+            "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
 
-        fmt = "%(asctime)s | %(levelname)s | %(message)s"
-        formatter = ISTFormatter(fmt)
-        h.setFormatter(formatter)
-
-        logger.addHandler(h)
-        logger.propagate = False   # avoid FastAPI duplicate logs
-
-    # Allow dynamic log levels via env
-    level = os.getenv("LOG_LEVEL", "INFO").upper()
-    logger.setLevel(level)
-
+    logger.propagate = False
+    _LOGGERS[name] = logger
     return logger
