@@ -1,15 +1,21 @@
-# =========================================
-# backend_api.py
-# CORE API ROUTER (NO app HERE)
-# =========================================
+from fastapi import APIRouter, HTTPException
 
-from fastapi import APIRouter
+router = APIRouter(prefix="/api")
 
-router = APIRouter()
+@router.post("/run")
+def run_pipeline_api():
+    try:
+        # 🔴 IMPORTANT: import INSIDE function
+        from pipeline_engine import run_pipeline
 
-# -------------------------------
-# BASIC HEALTH / TEST ENDPOINT
-# -------------------------------
-@router.get("/api/ping")
-def ping():
-    return {"status": "backend_api_ok"}
+        result = run_pipeline()
+        return {
+            "status": "OK",
+            "result": result
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
