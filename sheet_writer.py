@@ -1,7 +1,7 @@
 """
 sheet_writer.py
 Level-80 Sheet Writer
-Safe adapter for pipeline_engine
+Single-source adapter for pipeline_engine
 """
 
 import os
@@ -25,7 +25,10 @@ def _get_service():
     return build("sheets", "v4", credentials=creds)
 
 
-def write_to_sheet(rfq: Dict) -> int:
+# =====================================================
+# ✅ THIS IS WHAT pipeline_engine IMPORTS
+# =====================================================
+def write_sheet(rfq: Dict) -> int:
     """
     Adapter expected by pipeline_engine
     MUST return number of rows written
