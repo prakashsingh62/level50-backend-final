@@ -1,9 +1,9 @@
 from strict_audit_logger import log_audit_event
-from sheet_writer import write_to_sheet
+from sheet_writer import write_sheet          # ✅ FIXED
 from sheet_reader import read_rfqs
 from email_builder import send_vendor_email
 from classify import classify_rfq
-from logger import get_ist_now   # ✅ FIX: existing, stable IST helper
+from logger import get_ist_now   # stable IST helper
 
 
 def run_pipeline():
@@ -30,7 +30,7 @@ def run_pipeline():
             # -------------------------------
             # STEP 3: WRITE TO SHEET
             # -------------------------------
-            rows_written = write_to_sheet(rfq)
+            rows_written = write_sheet(rfq)   # ✅ FIXED
 
             # -------------------------------
             # SUCCESS AUDIT (RFQ-LEVEL TRACE)
