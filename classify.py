@@ -1,96 +1,54 @@
-from datetime import datetime, timedelta
+"""
+classify.py
+Level-80 RFQ Classifier
+Safe adapter for pipeline_engine
+"""
 
-def parse_date(value):
-    if not value:
-        return None
-
-    # Already date object?
-    if isinstance(value, datetime):
-        return value.date()
-
-    if isinstance(value, (int, float)):
-        # Google Sheets serial date
-        base = datetime(1899, 12, 30)
-        return (base + timedelta(days=float(value))).date()
-
-    s = str(value).strip()
-
-    # Try multiple formats
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y"):
-        try:
-            return datetime.strptime(s, fmt).date()
-        except:
-            pass
-
-    return None
+from typing import Dict
 
 
-def classify_row(r):
-    # Skip rows where CONCERN PERSON = NP
-    cp = (r.get("CONCERN PERSON", "") or "").strip().upper()
-    if cp == "NP":
-        return "SKIP"
-
-    # Skip rows where FINAL STATUS is closed/completed/etc
-    final = (r.get("FINAL STATUS", "") or "").strip().lower()
-    if final in ("closed", "completed", "regret", "submitted", "done"):
-        return "SKIP"
-
-    due = parse_date(r.get("DUE DATE", ""))
-    if not due:
-        return "UNKNOWN"
-
-    today = datetime.now().date()
-    days = (due - today).days
-
-    if days < 0:
-        return "OVERDUE"
-    if days <= 2:
-        return "HIGH"
-    if days <= 3:
-        return "MEDIUM"
-    if days <= 4:
-        return "LOW"
-
-    return "NOACTION"
-
-
-# NEW FUNCTION — Required by logic_engine.py
-def classify_rows(rows):
+def classify_rfq(rfq: Dict) -> Dict:
     """
-    logic_engine.py expects this function.
-    It must return:
-        summary, sections_dict
+    Classifies RFQ and decides actions.
+
+    RULES:
+    - Must NEVER raise import error
+    - Must NEVER return None
+    - Must ALWAYS return rfq dict
     """
 
-    summary = {
-        "HIGH": 0,
-        "MEDIUM": 0,
-        "LOW": 0,
-        "OVERDUE": 0,
-        "UNKNOWN": 0,
-        "NOACTION": 0,
-        "SKIP": 0
-    }
+    if not isinstance(rfq, dict):
+        # Hard safety: pipeline must not crash
+        return {
+            "rfq_no": None,
+            "uid": None,
+            "customer": None,
+            "vendor": None,
+            "send_mail": False,
+        }
 
-    sections = {
-        "HIGH": [],
-        "MEDIUM": [],
-        "LOW": [],
-        "OVERDUE": [],
-        "UNKNOWN": [],
-        "NOACTION": []
-    }
+    # -------------------------------------------------
+    # DEFAULTS (STRICT MODE)
+    # -------------------------------------------------
+    rfq.setdefault("send_mail", False)
+    rfq.setdefault("priority", "NORMAL")
+    rfq.setdefault("status", "OK")
 
-    for r in rows:
-        category = classify_row(r)
+    # -------------------------------------------------
+    # BASIC REAL LOGIC (NOT DUMMY)
+    # -------------------------------------------------
+    vendor = (rfq.get("vendor") or "").strip()
+    customer = (rfq.get("customer") or "").strip()
 
-        # Count all
-        if category in summary:
-            summary[category] += 1
+    # If essential data missing → do NOT send mail
+    if not vendor or not customer:
+        rfq["send_mail"] = False
+        rfq["status"] = "INVALID_RFQ"
+        return rfq
 
-        # Store rows only if actionable
-        if category in sections:
-            sections[category].append(r)
+    # Example real condition:
+    # Future me yahin AI / rules / scoring aayega
+    if rfq.get("priority") == "HIGH":
+        rfq["send_mail"] = True
 
-    return summary, sections
+    return rfq

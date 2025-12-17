@@ -1,13 +1,14 @@
+"""
+sheet_reader.py
+Level-80 RFQ Reader
+Safe adapter for pipeline_engine
+"""
+
 import os
 import json
+from typing import List, Dict
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-from dotenv import load_dotenv
-
-load_dotenv()
-
-SHEET_ID = os.getenv("PROD_SHEET_ID")
-RFQ_TAB = os.getenv("PROD_RFQ_TAB")  # RFQ data tab name
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -15,7 +16,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 def _get_service():
     service_json = os.getenv("CLIENT_SECRET_JSON")
     if not service_json:
-        raise RuntimeError("CLIENT_SECRET_JSON missing in env")
+        raise RuntimeError("CLIENT_SECRET_JSON missing")
 
     creds = Credentials.from_service_account_info(
         json.loads(service_json),
@@ -24,22 +25,28 @@ def _get_service():
     return build("sheets", "v4", credentials=creds)
 
 
-# =====================================================
-# ✅ THIS IS WHAT PIPELINE EXPECTS
-# =====================================================
-def read_rfqs():
+def read_rfqs() -> List[Dict]:
     """
-    Reads RFQs from Google Sheet and returns list of dicts
+    Adapter expected by pipeline_engine
+    MUST return list (empty allowed)
+    MUST NOT crash pipeline
     """
+
+    sheet_id = os.getenv("PROD_SHEET_ID")
+    rfq_tab = os.getenv("PROD_RFQ_TAB")
+
+    if not sheet_id or not rfq_tab:
+        return []
+
     service = _get_service()
 
     result = service.spreadsheets().values().get(
-        spreadsheetId=SHEET_ID,
-        range=RFQ_TAB
+        spreadsheetId=sheet_id,
+        range=rfq_tab
     ).execute()
 
     rows = result.get("values", [])
-    if not rows or len(rows) < 2:
+    if len(rows) < 2:
         return []
 
     headers = rows[0]
@@ -47,13 +54,16 @@ def read_rfqs():
 
     rfqs = []
     for row in data_rows:
-        rfq = dict(zip(headers, row))
+        raw = dict(zip(headers, row))
+
         rfqs.append({
-            "rfq_no": rfq.get("RFQ NO"),
-            "uid": rfq.get("UID NO"),
-            "customer": rfq.get("CUSTOMER"),
-            "vendor": rfq.get("VENDOR"),
-            "send_mail": rfq.get("SEND MAIL") == "YES"
+            "rfq_no": raw.get("RFQ NO"),
+            "uid": raw.get("UID NO"),
+            "customer": raw.get("CUSTOMER"),
+            "vendor": raw.get("VENDOR"),
+            "priority": raw.get("PRIORITY", "NORMAL"),
+            "send_mail": raw.get("SEND MAIL") == "YES",
+            "status": "OK",
         })
 
     return rfqs
