@@ -1,99 +1,70 @@
-# ------------------------------------------------------------
-# PIPELINE ENGINE — LEVEL-70 + PHASE-11 READY
-# ------------------------------------------------------------
-
-from logger import get_logger
-from utils.status_engine import compute_status, compute_followup
-from utils.vendor_router import check_vendor_query
-from utils.auto_recovery import auto_recovery
-
-logger = get_logger("PIPELINE_ENGINE")
+from strict_audit_logger import log_audit_event
+from sheet_writer import write_to_sheet
+from sheet_reader import read_rfqs
+from email_builder import send_vendor_email
+from classify import classify_rfq
+from logger import get_ist_now   # ✅ FIX: existing, stable IST helper
 
 
-class Level70Pipeline:
-    def __init__(self):
-        logger.info("Level70Pipeline initialized")
+def run_pipeline():
+    """
+    Core Level-80 pipeline
+    RFQ-by-RFQ execution with HARD audit trace
+    """
 
-    # --------------------------------------------------------
-    # INTERNAL CORE LOGIC
-    # --------------------------------------------------------
-    def run_pipeline_internal(self, payload: dict):
-        """
-        Actual pipeline logic.
-        This MUST raise exceptions if something is wrong.
-        AutoRecovery will catch it.
-        """
+    rfqs = read_rfqs()
 
-        ai_output = payload.get("ai_output")
-        if not ai_output:
-            raise ValueError("ai_output missing in payload")
+    for rfq in rfqs:
+        try:
+            # -------------------------------
+            # STEP 1: CLASSIFICATION
+            # -------------------------------
+            classify_rfq(rfq)
 
-        rfq = ai_output.get("rfq")
-        uid = ai_output.get("uid")
+            # -------------------------------
+            # STEP 2: SEND MAIL (if required)
+            # -------------------------------
+            if rfq.get("send_mail"):
+                send_vendor_email(rfq)
 
-        if not rfq or not uid:
-            raise ValueError("rfq / uid missing in ai_output")
+            # -------------------------------
+            # STEP 3: WRITE TO SHEET
+            # -------------------------------
+            rows_written = write_to_sheet(rfq)
 
-        logger.info(f"Processing RFQ={rfq}, UID={uid}")
+            # -------------------------------
+            # SUCCESS AUDIT (RFQ-LEVEL TRACE)
+            # -------------------------------
+            log_audit_event(
+                timestamp=get_ist_now(),
+                run_id="POST_UPDATE",
+                status="OK",
+                remarks="OK",
+                rows_written=rows_written,
 
-        # 1️⃣ Vendor query detection
-        vendor_query = check_vendor_query(ai_output)
+                rfq_no=rfq.get("rfq_no"),
+                uid_no=rfq.get("uid"),
+                customer=rfq.get("customer"),
+                vendor=rfq.get("vendor"),
+                step="COMPLETE"
+            )
 
-        # 2️⃣ Status computation
-        status = compute_status(ai_output)
+        except Exception as e:
+            # -------------------------------
+            # FAILURE — RFQ-LEVEL TRACE
+            # -------------------------------
+            log_audit_event(
+                timestamp=get_ist_now(),
+                run_id="POST_UPDATE",
+                status="ERROR",
+                error_type="SYSTEM",
+                error_message=str(e),
 
-        # 3️⃣ Follow-up logic
-        followup = compute_followup(ai_output)
+                rfq_no=rfq.get("rfq_no"),
+                uid_no=rfq.get("uid"),
+                customer=rfq.get("customer"),
+                vendor=rfq.get("vendor"),
+                step="PIPELINE"
+            )
 
-        decision = ai_output.get("decision") or status
-
-        return {
-            "status": "ok",
-            "rfq": rfq,
-            "uid": uid,
-            "decision": decision,
-            "vendor_query": vendor_query,
-            "followup": followup
-        }
-
-    # --------------------------------------------------------
-    # PUBLIC SAFE ENTRY (LEVEL-70)
-    # --------------------------------------------------------
-    def run(self, payload: dict):
-        """
-        SAFE execution with auto-recovery.
-        """
-        return auto_recovery.safe_run(
-            self.run_pipeline_internal,
-            payload
-        )
-
-    # --------------------------------------------------------
-    # PHASE-11 ENTRY (OPTIONAL FUTURE USE)
-    # --------------------------------------------------------
-    def run_phase11(self, payload: dict):
-        """
-        Phase-11 wrapper.
-        Right now delegates to same pipeline.
-        """
-        return self.run(payload)
-
-
-# ------------------------------------------------------------
-# APPROVAL APPLY (LEGACY — DO NOT TOUCH)
-# ------------------------------------------------------------
-def apply_approved_update(row, ai_output):
-    logger.info("Applying approved update")
-
-    if not row or not ai_output:
-        return {
-            "status": "error",
-            "reason": "row / ai_output missing"
-        }
-
-    # Stub — real sheet update already exists elsewhere
-    return {
-        "status": "approved",
-        "row": row,
-        "ai_output": ai_output
-    }
+    return {"status": "completed"}
