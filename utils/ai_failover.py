@@ -1,71 +1,38 @@
-from utils.logger import log
+# utils/ai_failover.py
 
-class AIFailover:
+import traceback
+
+# --- SAFE LOGGER IMPORT ---
+try:
+    from logger import logger
+except Exception:
+    import logging
+    logger = logging.getLogger(__name__)
+
+
+def ai_failover(primary_func, fallback_func, *args, **kwargs):
     """
-    INFINITY PACK-5: AI SAFETY FAILOVER
-    ------------------------------------
-    Protects Level-70 pipeline from:
-        ✔ Missing AI fields
-        ✔ Wrong RFQ / UID extraction
-        ✔ Wrong vendor status
-        ✔ Wrong follow-up logic
-        ✔ AI hallucinations
-        ✔ Invalid values
+    Execute primary function, fallback if it fails.
+    Must NEVER crash pipeline.
     """
+    try:
+        return primary_func(*args, **kwargs)
 
-    REQUIRED_FIELDS = [
-        "rfq", "uid", "vendor_status", "remarks"
-    ]
+    except Exception as e:
+        try:
+            logger.error(f"[AI_FAILOVER] Primary failed: {e}")
+            logger.debug(traceback.format_exc())
+        except Exception:
+            pass
 
-    def validate(self, ai_output):
-        """
-        Auto-correct missing fields & enforce safe structure.
-        """
-        safe_output = ai_output.copy()
+        try:
+            logger.warning("[AI_FAILOVER] Running fallback")
+            return fallback_func(*args, **kwargs)
+        except Exception as e2:
+            try:
+                logger.critical(f"[AI_FAILOVER] Fallback failed: {e2}")
+                logger.debug(traceback.format_exc())
+            except Exception:
+                pass
 
-        for field in self.REQUIRED_FIELDS:
-            if field not in safe_output or safe_output[field] in [None, "", []]:
-                log(f"[AI FAILOVER] Missing {field} → Auto-fixing.")
-                safe_output[field] = ""
-
-        # Block invalid UID formats
-        if "uid" in safe_output and len(str(safe_output["uid"])) < 3:
-            log("[AI FAILOVER] UID looks invalid → clearing.")
-            safe_output["uid"] = ""
-
-        # Block invalid RFQ formats
-        if "rfq" in safe_output and len(str(safe_output["rfq"])) < 3:
-            log("[AI FAILOVER] RFQ looks invalid → clearing.")
-            safe_output["rfq"] = ""
-
-        return safe_output
-
-
-    def pre_update_check(self, ai_output):
-        """
-        Verify AI output before sheet write.
-        If unsafe → block update.
-        """
-        if not ai_output.get("vendor_status"):
-            return {
-                "unsafe": True,
-                "reason": "Missing vendor_status"
-            }
-
-        if not ai_output.get("rfq") or len(ai_output["rfq"]) < 3:
-            return {
-                "unsafe": True,
-                "reason": "Invalid RFQ"
-            }
-
-        if not ai_output.get("uid") or len(ai_output["uid"]) < 3:
-            return {
-                "unsafe": True,
-                "reason": "Invalid UID"
-            }
-
-        return {"unsafe": False}
-
-
-# Singleton instance
-ai_failover = AIFailover()
+            return None

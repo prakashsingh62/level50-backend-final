@@ -1,5 +1,7 @@
 import time
-from utils.logger import log
+from logger import get_logger
+
+log = get_logger(__name__)
 
 class AutonomousBehavior:
     """

@@ -1,105 +1,58 @@
-# =========================================
-# strict_audit_logger.py
-# Level-80 Audit → Google Sheet (FINAL / STABLE)
-# =========================================
+# ------------------------------------------------------------
+# STRICT AUDIT LOGGER — LEVEL-80 COMPATIBLE
+# ------------------------------------------------------------
 
-import os
 import json
 import datetime
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from dotenv import load_dotenv
+import threading
 
-load_dotenv()
-
-# -------------------------------------------------
-# ENV CONFIG
-# -------------------------------------------------
-SHEET_ID = os.getenv("PROD_SHEET_ID")
-TAB_NAME = os.getenv("PROD_TAB")
-CLIENT_SECRET_JSON = os.getenv("CLIENT_SECRET_JSON")
-
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+_AUDIT_LOCK = threading.Lock()
+_AUDIT_LOG_FILE = "strict_audit.log"
 
 
-# -------------------------------------------------
-# TIME (IST)
-# -------------------------------------------------
-def _now_ist():
-    return (
-        datetime.datetime.now(datetime.timezone.utc)
-        + datetime.timedelta(hours=5, minutes=30)
-    ).strftime("%d/%m/%Y %H:%M:%S IST")
+def _write_log(entry: dict):
+    with _AUDIT_LOCK:
+        with open(_AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-# -------------------------------------------------
-# GOOGLE AUTH
-# -------------------------------------------------
-def _load_credentials():
-    if not CLIENT_SECRET_JSON:
-        raise RuntimeError("CLIENT_SECRET_JSON missing")
-
-    data = json.loads(CLIENT_SECRET_JSON)
-    return Credentials.from_service_account_info(data, scopes=SCOPES)
-
-
-# -------------------------------------------------
-# APPEND ROW
-# -------------------------------------------------
-def _append_row(values: list):
-    creds = _load_credentials()
-    service = build("sheets", "v4", credentials=creds)
-
-    body = {"values": [values]}
-
-    service.spreadsheets().values().append(
-        spreadsheetId=SHEET_ID,
-        range=f"{TAB_NAME}!A1",
-        valueInputOption="USER_ENTERED",
-        insertDataOption="INSERT_ROWS",
-        body=body,
-    ).execute()
+def write_audit(
+    actor: str,
+    action: str,
+    entity_type: str,
+    entity_id: str,
+    before=None,
+    after=None,
+):
+    entry = {
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "actor": actor,
+        "action": action,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "before": before,
+        "after": after,
+    }
+    _write_log(entry)
 
 
-# -------------------------------------------------
-# CORE LOGGER
-# -------------------------------------------------
-def _log_post_update(rows_written, affected_rows, updater, event_type="POST_UPDATE"):
-    _append_row([
-        _now_ist(),
-        "",                     # RFQ NO (future use)
-        "",                     # UID (future use)
-        event_type,
-        "SUCCESS",
-        rows_written,
-        updater,
-        f"Rows updated: {affected_rows}",
-    ])
-
-
-# -------------------------------------------------
-# STRICT MODE ENTRY POINT (DO NOT CHANGE NAME)
-# -------------------------------------------------
-def write_audit(**payload):
+# ------------------------------------------------------------
+# 🔒 REQUIRED BY pipeline_engine.py
+# ------------------------------------------------------------
+def log_post_update_snapshot(
+    rows_written: int,
+    affected_rows: list,
+    updater: str,
+):
     """
-    SAFE ENTRY POINT
-    Accepts ANY future keys without crashing.
-
-    Known keys:
-    - rows_written
-    - affected_rows
-    - updater
-    - event_type
+    Level-80 Strict Mode post-update snapshot.
+    REQUIRED function — do not remove.
     """
-
-    rows_written = payload.get("rows_written", 0)
-    affected_rows = payload.get("affected_rows", [])
-    updater = payload.get("updater", "SYSTEM")
-    event_type = payload.get("event_type", "POST_UPDATE")
-
-    _log_post_update(
-        rows_written=rows_written,
-        affected_rows=affected_rows,
-        updater=updater,
-        event_type=event_type,
-    )
+    entry = {
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "type": "POST_UPDATE_SNAPSHOT",
+        "rows_written": rows_written,
+        "affected_rows": affected_rows,
+        "updater": updater,
+    }
+    _write_log(entry)
