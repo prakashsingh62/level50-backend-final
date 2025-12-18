@@ -71,3 +71,12 @@ def root():
         "mode": "LEVEL-80",
         "audit": "ENABLED"
     }
+
+@app.get("/debug/headers")
+def debug_headers():
+    rows = read_rfqs()
+    if not rows:
+        return {"error": "no rows returned"}
+    return {
+        "headers": list(rows[0].keys())
+    }
