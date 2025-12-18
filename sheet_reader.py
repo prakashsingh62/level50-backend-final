@@ -25,6 +25,16 @@ def _get_service():
     return build("sheets", "v4", credentials=creds)
 
 
+def _build_range(tab_name: str) -> str:
+    """
+    Google Sheets range builder
+    Quotes ONLY if space exists
+    """
+    if " " in tab_name:
+        return f"'{tab_name}'!A1:Z"
+    return f"{tab_name}!A1:Z"
+
+
 def read_rfqs() -> List[Dict]:
     """
     REAL RFQ reader used by pipeline_engine
@@ -38,10 +48,11 @@ def read_rfqs() -> List[Dict]:
 
     service = _get_service()
 
-    # ✅ IMPORTANT: tab name MUST be quoted
+    range_name = _build_range(rfq_tab)
+
     result = service.spreadsheets().values().get(
         spreadsheetId=sheet_id,
-        range=f"'{rfq_tab}'!A1:Z"
+        range=range_name
     ).execute()
 
     rows = result.get("values", [])
