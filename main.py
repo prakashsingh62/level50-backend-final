@@ -1,16 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import os
 
 from backend_api import router as backend_router
 from audit_report_api import router as audit_router
 
-# 👉 ADD THESE IMPORTS
+# RFQ filtering
 from rfq_filter_engine import filter_rfqs
 from sheet_reader import read_rfqs
 
 app = FastAPI()
 
+# -----------------------------
 # CORS
+# -----------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,12 +22,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# -----------------------------
 # Existing Routers (UNCHANGED)
+# -----------------------------
 app.include_router(backend_router)
 app.include_router(audit_router)
 
 # -----------------------------
-# ✅ RFQ FILTER ENDPOINT (NEW)
+# RFQ FILTER ENDPOINT
 # -----------------------------
 @app.get("/rfqs/filter")
 def rfqs_filter(
@@ -46,7 +51,19 @@ def rfqs_filter(
         page_size=page_size
     )
 
-# Root
+# -----------------------------
+# SAFETY / DRY-RUN VISIBILITY
+# -----------------------------
+@app.get("/system/mode")
+def system_mode():
+    return {
+        "automation_enabled": os.getenv("AUTOMATION_ENABLED", "false"),
+        "dry_run": os.getenv("DRY_RUN", "true"),
+    }
+
+# -----------------------------
+# Root / Health
+# -----------------------------
 @app.get("/")
 def root():
     return {
