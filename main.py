@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+                                                                                                                                                                                                                                                                                                                                                                                                                        from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
@@ -74,9 +74,14 @@ def root():
 
 @app.get("/debug/headers")
 def debug_headers():
-    rows = read_rfqs()
-    if not rows:
-        return {"error": "no rows returned"}
-    return {
-        "headers": list(rows[0].keys())
-    }
+    try:
+        rows = read_rfqs()
+        if not rows:
+            return {"error": "no rows returned"}
+        return {
+            "headers": list(rows[0].keys())
+        }
+    except Exception as e:
+        return {
+            "exception": str(e)
+        }
