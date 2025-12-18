@@ -1,7 +1,8 @@
 """
 sheet_reader.py
 Level-80 RFQ Reader
-Single-source reader for pipeline_engine
+Single-source reader for pipeline_engine & RFQ filtering
+FULL ROW MODE (Step-1.5)
 """
 
 import os
@@ -10,6 +11,7 @@ from typing import List, Dict
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
+# Scope: read/write allowed (existing setup preserved)
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 
@@ -27,7 +29,12 @@ def _get_service():
 
 def read_rfqs() -> List[Dict]:
     """
-    REAL RFQ reader used by pipeline_engine
+    REAL RFQ reader (FULL ROW MODE)
+
+    Returns:
+    - Each RFQ as a dict
+    - Keys EXACTLY same as Google Sheet headers
+    - No trimming, no renaming, no filtering
     """
 
     sheet_id = os.getenv("PROD_SHEET_ID")
@@ -38,7 +45,7 @@ def read_rfqs() -> List[Dict]:
 
     service = _get_service()
 
-    # ✅ FIXED RANGE — AT is required
+    # IMPORTANT: AT range is required for your sheet
     result = service.spreadsheets().values().get(
         spreadsheetId=sheet_id,
         range=f"'{rfq_tab}'!A1:AT"
@@ -54,15 +61,8 @@ def read_rfqs() -> List[Dict]:
     rfqs: List[Dict] = []
 
     for row in data_rows:
+        # zip auto-handles short rows
         record = dict(zip(headers, row))
-
-        rfqs.append({
-            "rfq_no": record.get("RFQ NO"),
-            "uid": record.get("UID NO"),
-            "customer": record.get("CUSTOMER"),
-            "vendor": record.get("VENDOR"),
-            "vendor_email": record.get("VENDOR EMAIL"),
-            "send_mail": str(record.get("SEND MAIL", "")).strip().upper() == "YES",
-        })
+        rfqs.append(record)
 
     return rfqs
