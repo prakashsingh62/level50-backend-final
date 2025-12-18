@@ -35,7 +35,7 @@ def rfqs_filter(
     page: int = 1,
     page_size: int = 50
 ):
-    rows = read_sheet_rows("RFQ TEST SHEET")
+    rows = read_rfqs()
     return filter_rfqs(
         rows=rows,
         status=status,
