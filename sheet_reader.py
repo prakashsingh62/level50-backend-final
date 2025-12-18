@@ -1,7 +1,7 @@
 """
 sheet_reader.py
 Level-80 RFQ Reader
-Safe adapter for pipeline_engine
+Single-source reader for pipeline_engine
 """
 
 import os
@@ -27,9 +27,7 @@ def _get_service():
 
 def read_rfqs() -> List[Dict]:
     """
-    Adapter expected by pipeline_engine
-    MUST return list (empty allowed)
-    MUST NOT crash pipeline
+    REAL RFQ reader used by pipeline_engine
     """
 
     sheet_id = os.getenv("PROD_SHEET_ID")
@@ -42,7 +40,7 @@ def read_rfqs() -> List[Dict]:
 
     result = service.spreadsheets().values().get(
         spreadsheetId=sheet_id,
-        range=rfq_tab
+        range=f"{rfq_tab}!A1:Z"
     ).execute()
 
     rows = result.get("values", [])
@@ -54,16 +52,15 @@ def read_rfqs() -> List[Dict]:
 
     rfqs = []
     for row in data_rows:
-        raw = dict(zip(headers, row))
+        record = dict(zip(headers, row))
 
         rfqs.append({
-            "rfq_no": raw.get("RFQ NO"),
-            "uid": raw.get("UID NO"),
-            "customer": raw.get("CUSTOMER"),
-            "vendor": raw.get("VENDOR"),
-            "priority": raw.get("PRIORITY", "NORMAL"),
-            "send_mail": raw.get("SEND MAIL") == "YES",
-            "status": "OK",
+            "rfq_no": record.get("RFQ NO"),
+            "uid": record.get("UID NO"),
+            "customer": record.get("CUSTOMER"),
+            "vendor": record.get("VENDOR"),
+            "vendor_email": record.get("VENDOR EMAIL"),
+            "send_mail": str(record.get("SEND MAIL", "")).upper() == "YES",
         })
 
     return rfqs
