@@ -38,9 +38,10 @@ def read_rfqs() -> List[Dict]:
 
     service = _get_service()
 
+    # ✅ IMPORTANT: tab name MUST be quoted
     result = service.spreadsheets().values().get(
         spreadsheetId=sheet_id,
-        range=f"{rfq_tab}!A1:Z"
+        range=f"'{rfq_tab}'!A1:Z"
     ).execute()
 
     rows = result.get("values", [])
@@ -50,7 +51,8 @@ def read_rfqs() -> List[Dict]:
     headers = rows[0]
     data_rows = rows[1:]
 
-    rfqs = []
+    rfqs: List[Dict] = []
+
     for row in data_rows:
         record = dict(zip(headers, row))
 
@@ -60,7 +62,7 @@ def read_rfqs() -> List[Dict]:
             "customer": record.get("CUSTOMER"),
             "vendor": record.get("VENDOR"),
             "vendor_email": record.get("VENDOR EMAIL"),
-            "send_mail": str(record.get("SEND MAIL", "")).upper() == "YES",
+            "send_mail": str(record.get("SEND MAIL", "")).strip().upper() == "YES",
         })
 
     return rfqs
