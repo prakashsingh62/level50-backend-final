@@ -6,7 +6,7 @@ from audit_report_api import router as audit_router
 
 # 👉 ADD THESE IMPORTS
 from rfq_filter_engine import filter_rfqs
-from sheet_reader import read_sheet_rows
+from sheet_reader import read_rfqs
 
 app = FastAPI()
 
