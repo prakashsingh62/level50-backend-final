@@ -1,23 +1,18 @@
-import logging
-import sys
+"""
+logger.py
+Central logger + IST time helper
+Level-80 stable
+"""
 
-_LOGGERS = {}
+from datetime import datetime, timezone, timedelta
 
-def get_logger(name: str):
-    if name in _LOGGERS:
-        return _LOGGERS[name]
 
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
+IST = timezone(timedelta(hours=5, minutes=30))
 
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter(
-            "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
 
-    logger.propagate = False
-    _LOGGERS[name] = logger
-    return logger
+def get_ist_now() -> str:
+    """
+    Returns current IST timestamp as string
+    Used by pipeline_engine & audit
+    """
+    return datetime.now(IST).strftime("%d/%m/%Y %H:%M:%S IST")
