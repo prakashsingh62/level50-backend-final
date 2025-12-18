@@ -1,19 +1,15 @@
-                                                                                                                                                                                                                                                                                                                                                                                                                        from fastapi import FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
 from backend_api import router as backend_router
 from audit_report_api import router as audit_router
-
-# RFQ filtering
-from rfq_filter_engine import filter_rfqs
 from sheet_reader import read_rfqs
+from rfq_filter_engine import filter_rfqs
 
 app = FastAPI()
 
-# -----------------------------
 # CORS
-# -----------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,15 +18,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# -----------------------------
-# Existing Routers (UNCHANGED)
-# -----------------------------
+# Routers
 app.include_router(backend_router)
 app.include_router(audit_router)
 
-# -----------------------------
-# RFQ FILTER ENDPOINT
-# -----------------------------
+# RFQ Filter
 @app.get("/rfqs/filter")
 def rfqs_filter(
     status: str | None = None,
@@ -51,9 +43,18 @@ def rfqs_filter(
         page_size=page_size
     )
 
-# -----------------------------
-# SAFETY / DRY-RUN VISIBILITY
-# -----------------------------
+# Debug headers (TEMP)
+@app.get("/debug/headers")
+def debug_headers():
+    try:
+        rows = read_rfqs()
+        if not rows:
+            return {"error": "no rows returned"}
+        return {"headers": list(rows[0].keys())}
+    except Exception as e:
+        return {"exception": str(e)}
+
+# System mode
 @app.get("/system/mode")
 def system_mode():
     return {
@@ -61,9 +62,7 @@ def system_mode():
         "dry_run": os.getenv("DRY_RUN", "true"),
     }
 
-# -----------------------------
-# Root / Health
-# -----------------------------
+# Root
 @app.get("/")
 def root():
     return {
@@ -71,17 +70,3 @@ def root():
         "mode": "LEVEL-80",
         "audit": "ENABLED"
     }
-
-@app.get("/debug/headers")
-def debug_headers():
-    try:
-        rows = read_rfqs()
-        if not rows:
-            return {"error": "no rows returned"}
-        return {
-            "headers": list(rows[0].keys())
-        }
-    except Exception as e:
-        return {
-            "exception": str(e)
-        }
