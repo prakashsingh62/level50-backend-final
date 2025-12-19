@@ -1,6 +1,6 @@
 """
 sheet_reader.py
-Level-80 RFQ Reader (SAFE + FUTURE PROOF)
+Level-80 RFQ Reader (FINAL SAFE VERSION)
 """
 
 import os
@@ -13,9 +13,9 @@ from googleapiclient.errors import HttpError
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
 
-def _clean_tab_name(name: str) -> str:
+def _normalize_tab(name: str) -> str:
     """
-    Removes accidental quotes and trims spaces.
+    Always returns a SAFE tab name wrapped in SINGLE QUOTES.
     Handles:
     RFQ TEST SHEET
     'RFQ TEST SHEET'
@@ -23,7 +23,9 @@ def _clean_tab_name(name: str) -> str:
     """
     if not name:
         return ""
-    return name.strip().strip("'").strip('"')
+
+    clean = name.strip().strip("'").strip('"')
+    return f"'{clean}'"
 
 
 def _get_service():
@@ -40,19 +42,19 @@ def _get_service():
 
 def read_rfqs() -> List[Dict]:
     sheet_id = os.getenv("PROD_SHEET_ID")
-    raw_tab = os.getenv("PROD_RFQ_TAB")
+    tab_raw = os.getenv("PROD_RFQ_TAB")
 
-    if not sheet_id or not raw_tab:
+    if not sheet_id or not tab_raw:
         return []
 
-    tab = _clean_tab_name(raw_tab)
+    tab = _normalize_tab(tab_raw)
 
     service = _get_service()
 
     try:
         result = service.spreadsheets().values().get(
             spreadsheetId=sheet_id,
-            range=f"{tab}!A1:AT"   # ✅ NO quotes here
+            range=f"{tab}!A1:AT"
         ).execute()
     except HttpError as e:
         raise RuntimeError(f"Google Sheets read failed: {e}")
@@ -65,9 +67,7 @@ def read_rfqs() -> List[Dict]:
     data_rows = rows[1:]
 
     rfqs: List[Dict] = []
-
     for row in data_rows:
-        record = dict(zip(headers, row))
-        rfqs.append(record)
+        rfqs.append(dict(zip(headers, row)))
 
     return rfqs
