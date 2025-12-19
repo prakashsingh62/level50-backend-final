@@ -1,169 +1,108 @@
-from datetime import datetime, date
+from datetime import datetime
 from typing import List, Dict, Any
 
-DATE_FMT = "%d/%m/%Y"
+# ----------------------------
+# STATUS CANONICALIZATION
+# ----------------------------
 
-# -------------------------
-# Canonical Status Mapping
-# -------------------------
-CANONICAL_MAP = {
-    "VENDOR PENDING": [
-        "", "PENDING", "VENDOR PENDING", "AWAITING", "IN PROCESS"
-    ],
-    "QUOTATION RECEIVED": [
-        "QUOTATION RECEIVED", "QUOTE RECEIVED", "RECEIVED"
-    ],
-    "CLARIFICATION": [
-        "DETAILS REQUIRED", "DETAILKS REQUIRED", "CLARIFICATION",
-        "TECHNICAL QUERY", "QUERY",
-        "GAD REQUIRED", "FINAL DISCOUNTED PRICE", "DELIVERY TIME/PERIOD"
-    ],
-    "OFFER SUBMITTED": [
-        "SUBMITTED", "SUBNMITTED", "OFFER SUBMITTED",
-        "OFFER SENT", "QUOTATION SUBMITTED"
-    ],
-    "POST-OFFER QUERY": [
-        "POST OFFER QUERY", "CLIENT QUERY",
-        "DISCOUNT QUERY", "DELIVERY QUERY"
-    ],
-    "CLOSED": [
-        "CLOSED", "REGRET", "LOST",
-        "CANCELLED", "ORDER RECEIVED", "NOT REQUIRED"
-    ],
+STATUS_MAP = {
+    "RECEIVED": "QUOTATION_RECEIVED",
+    "ON WHATSAPP": "QUOTATION_RECEIVED",
+    "WHATSAPP": "QUOTATION_RECEIVED",
+
+    "SUBMITTED": "OFFER_SUBMITTED",
+    "OFFER SUBMITTED": "OFFER_SUBMITTED",
+
+    "POST OFFER QUERY": "POST_OFFER_QUERY",
+    "POST-OFFER QUERY": "POST_OFFER_QUERY",
+
+    "CLOSED": "CLOSED",
 }
 
-# -------------------------
-# Helpers
-# -------------------------
-def _norm(val: Any) -> str:
-    return str(val).strip().upper() if val else ""
+CANONICAL_STATUSES = {
+    "VENDOR_PENDING",
+    "QUOTATION_RECEIVED",
+    "OFFER_SUBMITTED",
+    "POST_OFFER_QUERY",
+    "CLOSED",
+    "UNKNOWN",
+}
 
-def _parse_date(val: Any):
+def canonical_status(raw):
+    if not raw:
+        return "UNKNOWN"
+
+    s = str(raw).strip().upper()
+    return STATUS_MAP.get(s, s if s in CANONICAL_STATUSES else "UNKNOWN")
+
+
+# ----------------------------
+# EDGE-CASE SAFE HELPERS
+# ----------------------------
+
+def safe_date(val):
+    if not val:
+        return None
     try:
-        return datetime.strptime(str(val).strip(), DATE_FMT).date()
+        return datetime.strptime(str(val).strip(), "%d/%m/%Y")
     except Exception:
         return None
 
-def canonical_status(raw: Any) -> str:
-    r = _norm(raw)
-    for canon, raws in CANONICAL_MAP.items():
-        if r in [x.upper() for x in raws]:
-            return canon
-    return "UNKNOWN"
 
-# -------------------------
-# Clarification Source
-# -------------------------
-def clarification_source(row: Dict[str, Any]) -> str:
-    status = _norm(row.get("CURRENT STATUS"))
-
-    has_client_signal = bool(
-        row.get("POST OFFER QUERY")
-        or row.get("POST QUERY DATE")
-        or status in ["FINAL DISCOUNTED PRICE", "DELIVERY TIME/PERIOD"]
+def is_vendor_pending(row: Dict[str, Any]) -> bool:
+    return (
+        not row.get("VENDOR QUOTATION STATUS")
+        and bool(row.get("INQUIRY SENT ON"))
     )
 
-    if status == "GAD REQUIRED":
-        if has_client_signal:
-            return "CLIENT"
-        if row.get("UID NO") or row.get("VENDOR"):
-            return "VENDOR"
-        return "UNKNOWN"
 
-    if has_client_signal:
-        return "CLIENT"
+def is_overdue(row: Dict[str, Any]) -> bool:
+    due = safe_date(row.get("DUE DATE"))
+    if not due:
+        return False
+    return due < datetime.now()
 
-    if status in [
-        "DETAILS REQUIRED",
-        "DETAILKS REQUIRED",
-        "TECHNICAL QUERY",
-        "QUERY",
-    ]:
-        return "VENDOR"
 
-    return "UNKNOWN"
+# ----------------------------
+# MAIN FILTER ENGINE
+# ----------------------------
 
-# -------------------------
-# Core Filter Engine
-# -------------------------
-def filter_rfqs(
+def apply_filters(
     rows: List[Dict[str, Any]],
-    status: str | None = None,
-    vendor_pending: bool | None = None,
-    overdue: bool | None = None,
-    last_n_days: int = 30,
-    page: int = 1,
-    page_size: int = 50,
-) -> Dict[str, Any]:
-
-    today = date.today()
-    cutoff = today.toordinal() - last_n_days
-
-    processed = []
+    status: str = None,
+    vendor_pending: bool = False,
+    overdue: bool = False,
+):
+    filtered = []
 
     for row in rows:
-        rfq_date = _parse_date(row.get("RFQ DATE"))
-        due_date = _parse_date(row.get("DUE DATE"))
-        uid_date = _parse_date(row.get("UID DATE"))
-
-        canon = canonical_status(row.get("CURRENT STATUS"))
-
-        # Date window
-        if rfq_date and rfq_date.toordinal() < cutoff:
-            continue
-
-        # Vendor pending rule
-        is_vendor_pending = (
-            canon == "VENDOR PENDING"
-            and (uid_date or rfq_date)
-            and (today - (uid_date or rfq_date)).days >= 2
+        row["canonical_status"] = canonical_status(
+            row.get("FINAL STATUS") or row.get("CURRENT STATUS")
         )
 
-        # Overdue rule
-        is_overdue = bool(due_date and today > due_date)
-
-        if vendor_pending is not None and is_vendor_pending != vendor_pending:
+        if status and row["canonical_status"] != status:
             continue
 
-        if overdue is not None and is_overdue != overdue:
+        if vendor_pending and not is_vendor_pending(row):
             continue
 
-        if status and canon != status.upper():
+        if overdue and not is_overdue(row):
             continue
 
-        out = dict(row)
-        out["canonical_status"] = canon
+        filtered.append(row)
 
-        if canon == "CLARIFICATION":
-            out["clarification_source"] = clarification_source(row)
+    return filtered
 
-        processed.append(out)
 
-    total = len(processed)
+# ----------------------------
+# SUMMARY BUILDER
+# ----------------------------
 
-    start = (page - 1) * page_size
-    end = start + page_size
-    page_rows = processed[start:end]
+def build_summary(rows: List[Dict[str, Any]]):
+    summary = {k: 0 for k in CANONICAL_STATUSES}
 
-    summary = {
-        "VENDOR PENDING": 0,
-        "QUOTATION RECEIVED": 0,
-        "CLARIFICATION": 0,
-        "OFFER SUBMITTED": 0,
-        "POST-OFFER QUERY": 0,
-        "CLOSED": 0,
-        "UNKNOWN": 0,
-    }
+    for r in rows:
+        s = r.get("canonical_status", "UNKNOWN")
+        summary[s] = summary.get(s, 0) + 1
 
-    for r in processed:
-        summary[r["canonical_status"]] += 1
-
-    return {
-        "meta": {
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-        },
-        "summary": summary,
-        "rows": page_rows,
-    }
+    return summary
