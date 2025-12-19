@@ -1,6 +1,6 @@
 """
 sheet_reader.py
-Level-80 RFQ Reader (FINAL SAFE VERSION)
+Level-80 RFQ Reader (METADATA RESOLVED — BULLETPROOF)
 """
 
 import os
@@ -11,21 +11,6 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-
-
-def _normalize_tab(name: str) -> str:
-    """
-    Always returns a SAFE tab name wrapped in SINGLE QUOTES.
-    Handles:
-    RFQ TEST SHEET
-    'RFQ TEST SHEET'
-    "RFQ TEST SHEET"
-    """
-    if not name:
-        return ""
-
-    clean = name.strip().strip("'").strip('"')
-    return f"'{clean}'"
 
 
 def _get_service():
@@ -40,21 +25,44 @@ def _get_service():
     return build("sheets", "v4", credentials=creds)
 
 
+def _resolve_tab_title(service, spreadsheet_id: str, expected: str) -> str:
+    """
+    Resolve ACTUAL sheet title from metadata.
+    Handles hidden spaces, unicode, rename issues.
+    """
+    expected_clean = expected.strip().lower()
+
+    meta = service.spreadsheets().get(
+        spreadsheetId=spreadsheet_id
+    ).execute()
+
+    for sheet in meta.get("sheets", []):
+        title = sheet["properties"]["title"]
+        if title.strip().lower() == expected_clean:
+            return title
+
+    raise RuntimeError(
+        f"Sheet tab '{expected}' not found. "
+        f"Available tabs: {[s['properties']['title'] for s in meta.get('sheets', [])]}"
+    )
+
+
 def read_rfqs() -> List[Dict]:
     sheet_id = os.getenv("PROD_SHEET_ID")
-    tab_raw = os.getenv("PROD_RFQ_TAB")
+    tab_env = os.getenv("PROD_RFQ_TAB")
 
-    if not sheet_id or not tab_raw:
+    if not sheet_id or not tab_env:
         return []
 
-    tab = _normalize_tab(tab_raw)
-
     service = _get_service()
+
+    # 🔑 REAL TAB TITLE RESOLUTION
+    real_tab = _resolve_tab_title(service, sheet_id, tab_env)
 
     try:
         result = service.spreadsheets().values().get(
             spreadsheetId=sheet_id,
-            range=f"{tab}!A1:AT"
+            range=f"'{real_tab}'!A1:AT"
         ).execute()
     except HttpError as e:
         raise RuntimeError(f"Google Sheets read failed: {e}")
@@ -66,8 +74,4 @@ def read_rfqs() -> List[Dict]:
     headers = rows[0]
     data_rows = rows[1:]
 
-    rfqs: List[Dict] = []
-    for row in data_rows:
-        rfqs.append(dict(zip(headers, row)))
-
-    return rfqs
+    return [dict(zip(headers, row)) for row in data_rows]
