@@ -3,8 +3,11 @@ import pytz
 
 IST = pytz.timezone("Asia/Kolkata")
 
+def ist_now():
+    return datetime.now(IST)
+
 def ist_date():
-    return datetime.now(IST).strftime("%d/%m/%Y")
+    return ist_now().strftime("%d/%m/%Y")
 
 def ist_time():
-    return datetime.now(IST).strftime("%H:%M:%S")
+    return ist_now().strftime("%H:%M:%S")
