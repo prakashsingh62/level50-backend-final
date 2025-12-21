@@ -1,39 +1,57 @@
+import os
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from utils.time_ist import ist_date, ist_time, ist_now
+
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+
+AUDIT_SHEET_ID = os.environ["AUDIT_SHEET_ID"]
+AUDIT_TAB = os.environ.get("AUDIT_TAB", "audit_log")
+CLIENT_SECRET_JSON = os.environ["CLIENT_SECRET_JSON"]
+
+def _service():
+    creds = Credentials.from_service_account_info(
+        eval(CLIENT_SECRET_JSON),
+        scopes=SCOPES
+    )
+    return build("sheets", "v4", credentials=creds)
+
 def log_audit_event(
     timestamp,
     run_id,
     status,
-    remarks="",
-    error_type="",
-    error_message="",
-    retry_count="",
-    updater="",
-    rows_written=None,
-
-    # 🔥 RFQ TRACE (OPTIONAL)
     rfq_no=None,
     uid_no=None,
     customer=None,
     vendor=None,
-    step=None
+    step=None,
+    remarks=None,
+    error_type=None,
+    error_message=None,
+    rows_written=None
 ):
-    record = {
-        "timestamp": timestamp,
-        "run_id": run_id,
-        "status": status,
-        "remarks": remarks,
-        "error_type": error_type,
-        "error_message": error_message,
-        "retry_count": retry_count,
-        "updater": updater,
-        "rows_written": rows_written or [],
+    service = _service()
+    sheet = service.spreadsheets()
 
-        # 🔍 RFQ CONTEXT
-        "rfq_no": rfq_no,
-        "uid_no": uid_no,
-        "customer": customer,
-        "vendor": vendor,
-        "step": step,
-    }
+    values = [[
+        timestamp.isoformat(),
+        ist_date(),
+        ist_time(),
+        rfq_no,
+        uid_no,
+        "MAIN_SHEET",
+        os.environ.get("PROD_RFQ_TAB"),
+        None,
+        None,
+        None,
+        None,
+        status
+    ]]
 
-    from logger import write_audit_log
-    write_audit_log(record)
+    sheet.values().append(
+        spreadsheetId=AUDIT_SHEET_ID,
+        range=f"{AUDIT_TAB}!A1",
+        valueInputOption="RAW",
+        insertDataOption="INSERT_ROWS",
+        body={"values": values}
+    ).execute()
