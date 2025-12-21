@@ -33,6 +33,7 @@ service = build("sheets", "v4", credentials=creds)
 # WRITE + AUDIT (REAL EXECUTED FUNCTION)
 # ============================================================
 def write_sheet(row_number, updates, rfq_no="", uid_no=""):
+    raise RuntimeError("WRITE_SHEET_EXECUTED")
     """
     row_number : sheet row (1-based)
     updates    : list of dicts
