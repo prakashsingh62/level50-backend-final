@@ -1,18 +1,32 @@
-"""
-logger.py
-Central logger + IST time helper
-Level-80 stable
-"""
+import logging
+from datetime import datetime
+import pytz
 
-from datetime import datetime, timezone, timedelta
+IST = pytz.timezone("Asia/Kolkata")
+
+_logger = None
+
+def get_logger():
+    global _logger
+
+    if _logger:
+        return _logger
+
+    logger = logging.getLogger("LEVEL80")
+    logger.setLevel(logging.INFO)
+
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter(
+        "[%(asctime)s] %(levelname)s %(message)s"
+    )
+    handler.setFormatter(formatter)
+
+    if not logger.handlers:
+        logger.addHandler(handler)
+
+    _logger = logger
+    return logger
 
 
-IST = timezone(timedelta(hours=5, minutes=30))
-
-
-def get_ist_now() -> str:
-    """
-    Returns current IST timestamp as string
-    Used by pipeline_engine & audit
-    """
-    return datetime.now(IST).strftime("%d/%m/%Y %H:%M:%S IST")
+def get_ist_now():
+    return datetime.now(IST).strftime("%d/%m/%Y %H:%M:%S")
