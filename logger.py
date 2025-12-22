@@ -1,32 +1,29 @@
+# logger.py
 import logging
-from datetime import datetime
-import pytz
+import sys
+from utils.time_ist import get_ist_now
 
-IST = pytz.timezone("Asia/Kolkata")
+_LOGGERS = {}
 
-_logger = None
+def get_logger(name: str = "level80"):
+    if name in _LOGGERS:
+        return _LOGGERS[name]
 
-def get_logger():
-    global _logger
-
-    if _logger:
-        return _logger
-
-    logger = logging.getLogger("LEVEL80")
+    logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
 
-    handler = logging.StreamHandler()
+    handler = logging.StreamHandler(sys.stdout)
     formatter = logging.Formatter(
-        "[%(asctime)s] %(levelname)s %(message)s"
+        "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
     )
     handler.setFormatter(formatter)
 
     if not logger.handlers:
         logger.addHandler(handler)
 
-    _logger = logger
+    _LOGGERS[name] = logger
     return logger
 
 
 def get_ist_now():
-    return datetime.now(IST).strftime("%d/%m/%Y %H:%M:%S")
+    return get_ist_now()
