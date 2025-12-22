@@ -9,7 +9,7 @@ from googleapiclient.discovery import build
 # Google Sheets client (ENV JSON)
 # --------------------------------------------------
 def _get_service():
-    info = json.loads(os.environ["CLIENT_SECRET_JSON"])
+    info = json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"])
     creds = Credentials.from_service_account_info(
         info,
         scopes=["https://www.googleapis.com/auth/spreadsheets"]
