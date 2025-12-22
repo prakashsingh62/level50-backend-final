@@ -6,7 +6,6 @@ from utils.time_ist import ist_now
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# REQUIRED ENV
 SERVICE_ACCOUNT_JSON = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
 PROD_SHEET_ID = os.environ.get("PROD_SHEET_ID")
 PROD_RFO_TAB = os.environ.get("PROD_RFO_TAB")
@@ -22,15 +21,8 @@ if not PROD_RFO_TAB:
 
 
 def _get_service():
-    try:
-        info = json.loads(SERVICE_ACCOUNT_JSON)
-    except Exception as e:
-        raise RuntimeError("Invalid GOOGLE_SERVICE_ACCOUNT_JSON") from e
-
-    creds = Credentials.from_service_account_info(
-        info,
-        scopes=SCOPES
-    )
+    info = json.loads(SERVICE_ACCOUNT_JSON)
+    creds = Credentials.from_service_account_info(info, scopes=SCOPES)
     return build("sheets", "v4", credentials=creds)
 
 
