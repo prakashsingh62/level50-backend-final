@@ -23,7 +23,3 @@ def get_logger(name: str = "level80"):
 
     _LOGGERS[name] = logger
     return logger
-
-
-def get_ist_now():
-    return get_ist_now()
