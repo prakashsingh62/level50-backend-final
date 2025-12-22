@@ -1,7 +1,6 @@
 # logger.py
 import logging
 import sys
-from utils.time_ist import get_ist_now as _get_ist_now
 
 _LOGGERS = {}
 
@@ -23,7 +22,3 @@ def get_logger(name: str = "level80"):
 
     _LOGGERS[name] = logger
     return logger
-
-
-def get_ist_now():
-    return _get_ist_now()
