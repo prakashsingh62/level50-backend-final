@@ -7,7 +7,10 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 AUDIT_SHEET_ID = os.environ["AUDIT_SHEET_ID"]
 AUDIT_TAB = os.environ.get("AUDIT_TAB", "audit_log")
-CLIENT_SECRET_JSON = os.environ["CLIENT_SECRET_JSON"]
+CLIENT_SECRET_JSON = (
+    os.environ.get("CLIENT_SECRET_JSON")
+    or os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+)
 
 def _service():
     creds = Credentials.from_service_account_info(
