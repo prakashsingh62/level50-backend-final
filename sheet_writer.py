@@ -5,7 +5,7 @@ from strict_audit_logger import log_audit_event
 from utils.time_ist import ist_now
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-CLIENT_SECRET_JSON = os.environ["CLIENT_SECRET_JSON"]
+CLIENT_SECRET_JSON = os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"]
 MAIN_SHEET_ID = os.environ["PROD_SHEET_ID"]
 MAIN_TAB = os.environ["PROD_RFQ_TAB"]
 
