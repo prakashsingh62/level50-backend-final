@@ -1,16 +1,15 @@
 from core.audit_bus import emit_audit
 from core.contracts import AuditEvent
 from utils.time_ist import ist_now
+from utils.json_safe import json_safe
 import uuid
 
 def run_phase11(payload: dict):
-    """
-    TEMP SAFE MODE:
-    - manual-test → audit only
-    - NO pipeline
-    - NO datetime leaks to API
-    """
+    normalized = payload
+    result = pipeline.run(normalized)
 
+    # 🔥 CRITICAL FIX — sanitize datetime
+    return json_safe(result)
     source = payload.get("source")
 
     # ✅ SAFE SHORT-CIRCUIT
