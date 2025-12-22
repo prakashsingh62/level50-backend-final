@@ -20,19 +20,22 @@ if not PROD_RFQ_TAB:
     raise RuntimeError("Missing PROD_RFQ_TAB")
 
 
-def _get_service():
-    info = json.loads(SERVICE_ACCOUNT_JSON)
-    creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+def _service():
+    creds = Credentials.from_service_account_info(
+        json.loads(SERVICE_ACCOUNT_JSON),
+        scopes=SCOPES
+    )
     return build("sheets", "v4", credentials=creds)
 
 
-def write_sheet(values: list):
-    service = _get_service()
+def write_sheet(row: list):
+    service = _service()
+    body = {"values": [row]}
 
     service.spreadsheets().values().append(
         spreadsheetId=PROD_SHEET_ID,
         range=f"{PROD_RFQ_TAB}!A1",
-        valueInputOption="RAW",
+        valueInputOption="USER_ENTERED",
         insertDataOption="INSERT_ROWS",
-        body={"values": values},
+        body=body
     ).execute()
