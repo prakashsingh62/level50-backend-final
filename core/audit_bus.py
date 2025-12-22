@@ -17,4 +17,7 @@ def emit_audit(event: AuditEvent):
     log.info(payload)
 
     # 2️⃣ ✅ WRITE TO GOOGLE SHEET
-    write_audit_row(payload)
+    write_audit_row(
+    tab_name=os.environ["AUDIT_TAB"],
+    audit_row=payload
+)
