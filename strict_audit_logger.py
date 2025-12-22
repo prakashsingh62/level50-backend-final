@@ -18,21 +18,13 @@ if not SERVICE_ACCOUNT_JSON:
 
 
 def _get_service():
-    try:
-        info = json.loads(SERVICE_ACCOUNT_JSON)
-    except Exception as e:
-        raise RuntimeError("Invalid GOOGLE_SERVICE_ACCOUNT_JSON") from e
-
-    creds = Credentials.from_service_account_info(
-        info,
-        scopes=SCOPES
-    )
+    info = json.loads(SERVICE_ACCOUNT_JSON)
+    creds = Credentials.from_service_account_info(info, scopes=SCOPES)
     return build("sheets", "v4", credentials=creds)
 
 
 def log_audit_event(run_id, stage, status, payload=None):
     service = _get_service()
-
     row = [
         ist_date(),
         ist_time(),
@@ -42,7 +34,6 @@ def log_audit_event(run_id, stage, status, payload=None):
         status,
         json.dumps(payload or {}, ensure_ascii=False),
     ]
-
     service.spreadsheets().values().append(
         spreadsheetId=AUDIT_SHEET_ID,
         range=f"{AUDIT_TAB}!A1",
