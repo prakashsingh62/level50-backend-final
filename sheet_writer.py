@@ -1,34 +1,45 @@
 import os
+import json
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-from strict_audit_logger import log_audit_event
 from utils.time_ist import ist_now
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-CLIENT_SECRET_JSON = os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"]
-MAIN_SHEET_ID = os.environ["PROD_SHEET_ID"]
-MAIN_TAB = os.environ["PROD_RFQ_TAB"]
 
-def _service():
+# REQUIRED ENV
+SERVICE_ACCOUNT_JSON = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+PROD_SHEET_ID = os.environ.get("PROD_SHEET_ID")
+PROD_RFO_TAB = os.environ.get("PROD_RFO_TAB")
+
+if not SERVICE_ACCOUNT_JSON:
+    raise RuntimeError("Missing GOOGLE_SERVICE_ACCOUNT_JSON")
+
+if not PROD_SHEET_ID:
+    raise RuntimeError("Missing PROD_SHEET_ID")
+
+if not PROD_RFO_TAB:
+    raise RuntimeError("Missing PROD_RFO_TAB")
+
+
+def _get_service():
+    try:
+        info = json.loads(SERVICE_ACCOUNT_JSON)
+    except Exception as e:
+        raise RuntimeError("Invalid GOOGLE_SERVICE_ACCOUNT_JSON") from e
+
     creds = Credentials.from_service_account_info(
-        eval(CLIENT_SECRET_JSON),
+        info,
         scopes=SCOPES
     )
     return build("sheets", "v4", credentials=creds)
 
-def write_sheet(rfq: dict):
-    service = _service()
-    sheet = service.spreadsheets()
 
-    row = rfq["row_number"]
-    col = rfq["target_col"]
-    value = rfq["value"]
-
-    sheet.values().update(
-        spreadsheetId=MAIN_SHEET_ID,
-        range=f"{MAIN_TAB}!{col}{row}",
+def write_sheet_row(values: list):
+    service = _get_service()
+    service.spreadsheets().values().append(
+        spreadsheetId=PROD_SHEET_ID,
+        range=f"{PROD_RFO_TAB}!A1",
         valueInputOption="RAW",
-        body={"values": [[value]]}
+        insertDataOption="INSERT_ROWS",
+        body={"values": [values]}
     ).execute()
-
-    return 1
