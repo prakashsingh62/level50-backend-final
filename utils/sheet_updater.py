@@ -20,20 +20,13 @@ def _get_service():
 # --------------------------------------------------
 # AUDIT ROW WRITER (FIXED)
 # --------------------------------------------------
-def write_audit_row(
-    tab_name: str,
-    audit_row: dict
-):
+def write_audit_row(*, spreadsheet_id: str, tab_name: str, audit_row: list):
     service = _get_service()
-
-    spreadsheet_id = os.environ.get("AUDIT_SHEET_ID")
-    if not spreadsheet_id:
-        raise RuntimeError("AUDIT_SHEET_ID env missing")
-
     service.spreadsheets().values().append(
         spreadsheetId=spreadsheet_id,
         range=f"{tab_name}!A1",
         valueInputOption="RAW",
         insertDataOption="INSERT_ROWS",
-        body={"values": [list(audit_row.values())]}
+        body={"values": [audit_row]},
     ).execute()
+
