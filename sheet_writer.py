@@ -8,7 +8,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 SERVICE_ACCOUNT_JSON = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
 PROD_SHEET_ID = os.environ.get("PROD_SHEET_ID")
-PROD_RFO_TAB = os.environ.get("PROD_RFO_TAB")
+PROD_RFQ_TAB = os.environ.get("PROD_RFQ_TAB")
 
 if not SERVICE_ACCOUNT_JSON:
     raise RuntimeError("Missing GOOGLE_SERVICE_ACCOUNT_JSON")
@@ -16,8 +16,8 @@ if not SERVICE_ACCOUNT_JSON:
 if not PROD_SHEET_ID:
     raise RuntimeError("Missing PROD_SHEET_ID")
 
-if not PROD_RFO_TAB:
-    raise RuntimeError("Missing PROD_RFO_TAB")
+if not PROD_RFQ_TAB:
+    raise RuntimeError("Missing PROD_RFQ_TAB")
 
 
 def _get_service():
@@ -26,12 +26,13 @@ def _get_service():
     return build("sheets", "v4", credentials=creds)
 
 
-def write_sheet_row(values: list):
+def write_sheet(values: list):
     service = _get_service()
+
     service.spreadsheets().values().append(
         spreadsheetId=PROD_SHEET_ID,
-        range=f"{PROD_RFO_TAB}!A1",
+        range=f"{PROD_RFQ_TAB}!A1",
         valueInputOption="RAW",
         insertDataOption="INSERT_ROWS",
-        body={"values": [values]}
+        body={"values": values},
     ).execute()
