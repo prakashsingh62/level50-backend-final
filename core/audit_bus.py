@@ -19,6 +19,13 @@ def emit_audit(event: AuditEvent):
 
     # 2️⃣ ✅ WRITE TO GOOGLE SHEET
     write_audit_row(
+    spreadsheet_id=os.environ["AUDIT_SHEET_ID"],
     tab_name=os.environ["AUDIT_TAB"],
-    audit_row=payload
+    audit_row=[
+        payload["trace_id"],
+        payload["stage"],
+        payload["timestamp"],
+        json.dumps(payload["payload"])
+    ]
 )
+
