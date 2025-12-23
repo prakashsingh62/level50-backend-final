@@ -1,43 +1,13 @@
-import os
+# strict_audit_logger.py
 import json
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from utils.time_ist import ist_date, ist_time, ist_now
+import os
+from utils.time_ist import ist_now
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+def log_audit_event(**event):
+    event["timestamp"] = ist_now()
 
-AUDIT_SHEET_ID = os.environ.get("AUDIT_SHEET_ID")
-AUDIT_TAB = os.environ.get("AUDIT_TAB", "audit_log")
-SERVICE_ACCOUNT_JSON = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    # OPTIONAL: write to sheet / db / file later
+    # For now just print to logs (Railway-safe)
+    print(json.dumps(event, ensure_ascii=False))
 
-if not AUDIT_SHEET_ID:
-    raise RuntimeError("Missing AUDIT_SHEET_ID")
-
-if not SERVICE_ACCOUNT_JSON:
-    raise RuntimeError("Missing GOOGLE_SERVICE_ACCOUNT_JSON")
-
-
-def _get_service():
-    info = json.loads(SERVICE_ACCOUNT_JSON)
-    creds = Credentials.from_service_account_info(info, scopes=SCOPES)
-    return build("sheets", "v4", credentials=creds)
-
-
-def log_audit_event(run_id, stage, status, payload=None):
-    service = _get_service()
-    row = [
-        ist_date(),
-        ist_time(),
-        ist_now(),
-        run_id,
-        stage,
-        status,
-        json.dumps(payload or {}, ensure_ascii=False),
-    ]
-    service.spreadsheets().values().append(
-        spreadsheetId=AUDIT_SHEET_ID,
-        range=f"{AUDIT_TAB}!A1",
-        valueInputOption="RAW",
-        insertDataOption="INSERT_ROWS",
-        body={"values": [row]}
-    ).execute()
+    return True
