@@ -20,7 +20,6 @@ class Level70Pipeline:
                 customer=rfq.get("customer"),
                 vendor=rfq.get("vendor"),
                 step="COMPLETE",
-                rows_written=rows
             )
 
         return {"status": "OK", "processed": len(rfqs)}
