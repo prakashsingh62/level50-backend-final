@@ -14,9 +14,9 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
 
 def _get_service():
-    raw = os.getenv("CLIENT_SECRET_JSON")
+    raw = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
     if not raw:
-        raise RuntimeError("CLIENT_SECRET_JSON missing")
+        raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON missing")
 
     creds = Credentials.from_service_account_info(
         json.loads(raw),
@@ -47,7 +47,7 @@ def _resolve_tab_title(service, spreadsheet_id: str, expected: str) -> str:
     )
 
 
-# 🔴 FIX: payload accepted (even if unused)
+# payload accepted for pipeline compatibility
 def read_rfqs(payload=None) -> List[Dict]:
     sheet_id = os.getenv("PROD_SHEET_ID")
     tab_env = os.getenv("PROD_RFQ_TAB")
@@ -74,5 +74,5 @@ def read_rfqs(payload=None) -> List[Dict]:
     headers = rows[0]
     data_rows = rows[1:]
 
-    # 🔴 FIX: ONLY list[dict] returned (NO tuple)
+    # ✅ ONLY list[dict] returned
     return [dict(zip(headers, row)) for row in data_rows]
