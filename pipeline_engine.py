@@ -3,7 +3,6 @@ from sheet_writer import write_sheet
 from sheet_reader import read_rfqs
 from email_builder import send_vendor_email
 from classify import classify_rfq
-from utils.time_ist import ist_now
 
 
 class Level70Pipeline:
@@ -22,7 +21,6 @@ class Level70Pipeline:
                 rows = write_sheet(rfq)
 
                 log_audit_event(
-                    timestamp=ist_now(),
                     run_id="PHASE11",
                     status="OK",
                     rfq_no=rfq.get("rfq_no"),
@@ -35,7 +33,6 @@ class Level70Pipeline:
 
             except Exception as e:
                 log_audit_event(
-                    timestamp=ist_now(),
                     run_id="PHASE11",
                     status="ERROR",
                     rfq_no=rfq.get("rfq_no"),
