@@ -5,9 +5,11 @@ from email_builder import send_vendor_email
 from classify import classify_rfq
 from utils.time_ist import ist_now
 
+
 class Level70Pipeline:
 
-    def run(self, payload: dict):
+    def run(self, payload: dict | None = None):
+        # 🔴 FIX: read_rfqs must accept payload (even if unused)
         rfqs = read_rfqs(payload)
 
         for rfq in rfqs:
@@ -46,9 +48,14 @@ class Level70Pipeline:
                 )
                 raise
 
-        return {"status": "OK", "processed": len(rfqs)}
+        return {
+            "status": "OK",
+            "processed": len(rfqs)
+        }
+
 
 pipeline = Level70Pipeline()
+
 
 def apply_approved_update(row, ai_output):
     return {"status": "SKIPPED"}
