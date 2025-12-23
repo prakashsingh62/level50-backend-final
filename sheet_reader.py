@@ -1,6 +1,6 @@
 """
 sheet_reader.py
-Level-80 RFQ Reader (METADATA RESOLVED — BULLETPROOF)
+Level-80 RFQ Reader (FINAL — PROD SAFE)
 """
 
 import os
@@ -26,10 +26,6 @@ def _get_service():
 
 
 def _resolve_tab_title(service, spreadsheet_id: str, expected: str) -> str:
-    """
-    Resolve ACTUAL sheet title from metadata.
-    Handles hidden spaces, unicode, rename issues.
-    """
     expected_clean = expected.strip().lower()
 
     meta = service.spreadsheets().get(
@@ -47,7 +43,6 @@ def _resolve_tab_title(service, spreadsheet_id: str, expected: str) -> str:
     )
 
 
-# payload accepted for pipeline compatibility
 def read_rfqs(payload=None) -> List[Dict]:
     sheet_id = os.getenv("PROD_SHEET_ID")
     tab_env = os.getenv("PROD_RFQ_TAB")
@@ -56,7 +51,6 @@ def read_rfqs(payload=None) -> List[Dict]:
         return []
 
     service = _get_service()
-
     real_tab = _resolve_tab_title(service, sheet_id, tab_env)
 
     try:
@@ -74,5 +68,4 @@ def read_rfqs(payload=None) -> List[Dict]:
     headers = rows[0]
     data_rows = rows[1:]
 
-    # ✅ ONLY list[dict] returned
     return [dict(zip(headers, row)) for row in data_rows]
