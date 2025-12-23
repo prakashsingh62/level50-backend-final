@@ -1,7 +1,5 @@
 class Level70Pipeline:
     def run(self, payload=None):
-
-        # 🔹 OPTION A: short test mode
         if payload and payload.get("mode") == "ping":
             return {
                 "status": "OK",
@@ -27,3 +25,7 @@ class Level70Pipeline:
             )
 
         return {"status": "OK", "processed": len(rfqs)}
+
+
+# 🔴 THIS LINE IS REQUIRED
+pipeline = Level70Pipeline()
