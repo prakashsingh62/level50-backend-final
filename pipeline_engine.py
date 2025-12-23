@@ -48,5 +48,7 @@ class Level70Pipeline:
 
         return {"status": "OK", "processed": len(rfqs)}
 
+pipeline = Level70Pipeline()
+
 def apply_approved_update(row, ai_output):
     return {"status": "SKIPPED"}
