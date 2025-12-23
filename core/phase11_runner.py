@@ -4,8 +4,7 @@ from utils.json_safe import json_safe
 from utils.time_ist import ist_now
 import uuid
 
-from core.pipeline_engine import pipeline  # 🔴 MUST be explicit
-
+from pipeline_engine import pipeline
 
 def run_phase11(payload):
     # 1️⃣ Run pipeline
