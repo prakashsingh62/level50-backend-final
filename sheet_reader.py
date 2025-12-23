@@ -47,7 +47,8 @@ def _resolve_tab_title(service, spreadsheet_id: str, expected: str) -> str:
     )
 
 
-def read_rfqs() -> List[Dict]:
+# 🔴 FIX: payload accepted (even if unused)
+def read_rfqs(payload=None) -> List[Dict]:
     sheet_id = os.getenv("PROD_SHEET_ID")
     tab_env = os.getenv("PROD_RFQ_TAB")
 
@@ -56,7 +57,6 @@ def read_rfqs() -> List[Dict]:
 
     service = _get_service()
 
-    # 🔑 REAL TAB TITLE RESOLUTION
     real_tab = _resolve_tab_title(service, sheet_id, tab_env)
 
     try:
@@ -74,4 +74,5 @@ def read_rfqs() -> List[Dict]:
     headers = rows[0]
     data_rows = rows[1:]
 
+    # 🔴 FIX: ONLY list[dict] returned (NO tuple)
     return [dict(zip(headers, row)) for row in data_rows]
