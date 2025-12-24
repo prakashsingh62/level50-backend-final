@@ -1,22 +1,21 @@
-from core.audit_bus import emit_audit
-from core.contracts import AuditEvent, TraceContext
-from utils.json_safe import json_safe
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from core.phase11_runner import run_phase11
 
-def run_phase11(payload):
-    trace = TraceContext.create()
+app = FastAPI(title="Level-80 / Phase-11 Backend")
 
-    emit_audit(
-        AuditEvent(
-            trace_id=trace.trace_id,
-            stage="phase11",
-            payload=payload or {},
-            timestamp=trace.timestamp
-        )
-    )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    return json_safe({
-        "status": "SUCCESS",
-        "phase": "11",
-        "trace_id": trace.trace_id,
-        "mode": "TEST_ONLY"
-    })
+@app.get("/")
+def root():
+    return {"status": "OK"}
+
+@app.post("/phase11")
+async def phase11(request: Request):
+    payload = await request.json()
+    return run_phase11(payload)
