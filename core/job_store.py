@@ -1,21 +1,30 @@
-from typing import Dict
+import threading
+from datetime import datetime
 
-# In-memory job store (simple + safe)
-JOB_STATUS: Dict[str, dict] = {}
-
-
-def create_job(trace_id: str):
-    JOB_STATUS[trace_id] = {
-        "status": "QUEUED",
-        "processed": 0
-    }
+_lock = threading.Lock()
+_jobs = {}
 
 
-def update_job(trace_id: str, **kwargs):
-    if trace_id not in JOB_STATUS:
-        return
-    JOB_STATUS[trace_id].update(kwargs)
+class JobStore:
+    def create_job(self, trace_id: str, status: str, mode: str):
+        with _lock:
+            _jobs[trace_id] = {
+                "trace_id": trace_id,
+                "status": status,
+                "mode": mode,
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat(),
+                "result": None,
+                "error": None,
+            }
 
+    def update_job(self, trace_id: str, **fields):
+        with _lock:
+            if trace_id not in _jobs:
+                return
+            _jobs[trace_id].update(fields)
+            _jobs[trace_id]["updated_at"] = datetime.utcnow().isoformat()
 
-def get_job(trace_id: str):
-    return JOB_STATUS.get(trace_id)
+    def get_job(self, trace_id: str):
+        with _lock:
+            return _jobs.get(trace_id)
