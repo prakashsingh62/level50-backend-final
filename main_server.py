@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from core.phase11_runner import run_phase11
 
@@ -16,6 +16,8 @@ app.add_middleware(
 def root():
     return {"status": "OK", "mode": "LEVEL-80", "audit": "ENABLED"}
 
-@app.post("/phase11/run")
-def phase11(payload: Optional[dict] = None):
+# ✅ MATCH POSTMAN URL
+@app.post("/phase11")
+async def phase11(request: Request):
+    payload = await request.json()
     return run_phase11(payload)
