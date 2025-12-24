@@ -3,7 +3,7 @@
 import json
 from datetime import datetime, timezone, timedelta
 
-from utils.sheet_updater import append_row_safe as append_row
+from utils.sheet_updater import write_audit_row
 from config import AUDIT_SHEET_ID
 
 # IST timezone
@@ -11,29 +11,27 @@ IST = timezone(timedelta(hours=5, minutes=30))
 
 
 def _now_ist():
-    return datetime.now(IST).isoformat()
+    return datetime.now(IST)
 
 
 def log_run_start(trace_id: str, phase: str, mode: str):
-    """
-    Logs Phase run START event
-    """
     row = [
-        _now_ist(),          # TIMESTAMP_IST
-        trace_id,            # TRACE_ID
-        phase,               # PHASE
-        mode,                # MODE
-        "RUNNING",           # STATUS
-        None,                # RFQS_TOTAL
-        None,                # RFQS_PROCESSED
-        None,                # ERROR_SUMMARY
-        json.dumps(
-            {"event": "START"},
-            ensure_ascii=False
-        ),                   # DETAILS_JSON
+        _now_ist().isoformat(),   # TIMESTAMP_IST
+        trace_id,                 # TRACE_ID
+        phase,                    # PHASE
+        mode,                     # MODE
+        "RUNNING",                # STATUS
+        "",                        # RFQS_TOTAL
+        "",                        # RFQS_PROCESSED
+        "",                        # ERROR_SUMMARY
+        json.dumps({"event": "START"}, ensure_ascii=False),  # DETAILS_JSON
     ]
 
-    append_row(AUDIT_SHEET_ID, "LEVEL_80_RUN_AUDIT", row)
+    write_audit_row(
+        spreadsheet_id=AUDIT_SHEET_ID,
+        tab_name="audit_log",
+        audit_row=row,
+    )
 
 
 def log_run_success(
@@ -43,18 +41,15 @@ def log_run_success(
     rfqs_total: int,
     rfqs_processed: int,
 ):
-    """
-    Logs Phase run SUCCESS event
-    """
     row = [
-        _now_ist(),          # TIMESTAMP_IST
-        trace_id,            # TRACE_ID
-        phase,               # PHASE
-        mode,                # MODE
-        "SUCCESS",           # STATUS
-        rfqs_total,          # RFQS_TOTAL
-        rfqs_processed,      # RFQS_PROCESSED
-        None,                # ERROR_SUMMARY
+        _now_ist().isoformat(),   # TIMESTAMP_IST
+        trace_id,                 # TRACE_ID
+        phase,                    # PHASE
+        mode,                     # MODE
+        "SUCCESS",                # STATUS
+        rfqs_total,               # RFQS_TOTAL
+        rfqs_processed,           # RFQS_PROCESSED
+        "",                        # ERROR_SUMMARY
         json.dumps(
             {
                 "result": {
@@ -62,11 +57,15 @@ def log_run_success(
                     "processed": rfqs_processed,
                 }
             },
-            ensure_ascii=False
-        ),                   # DETAILS_JSON
+            ensure_ascii=False,
+        ),                         # DETAILS_JSON
     ]
 
-    append_row(AUDIT_SHEET_ID, "LEVEL_80_RUN_AUDIT", row)
+    write_audit_row(
+        spreadsheet_id=AUDIT_SHEET_ID,
+        tab_name="audit_log",
+        audit_row=row,
+    )
 
 
 def log_run_failure(
@@ -75,25 +74,26 @@ def log_run_failure(
     mode: str,
     error: Exception,
 ):
-    """
-    Logs Phase run FAILURE event
-    """
     row = [
-        _now_ist(),          # TIMESTAMP_IST
-        trace_id,            # TRACE_ID
-        phase,               # PHASE
-        mode,                # MODE
-        "FAILED",            # STATUS
-        None,                # RFQS_TOTAL
-        None,                # RFQS_PROCESSED
-        str(error),          # ERROR_SUMMARY
+        _now_ist().isoformat(),   # TIMESTAMP_IST
+        trace_id,                 # TRACE_ID
+        phase,                    # PHASE
+        mode,                     # MODE
+        "FAILED",                 # STATUS
+        "",                        # RFQS_TOTAL
+        "",                        # RFQS_PROCESSED
+        str(error),               # ERROR_SUMMARY
         json.dumps(
             {
                 "error_type": type(error).__name__,
                 "error_message": str(error),
             },
-            ensure_ascii=False
-        ),                   # DETAILS_JSON
+            ensure_ascii=False,
+        ),                         # DETAILS_JSON
     ]
 
-    append_row(AUDIT_SHEET_ID, "LEVEL_80_RUN_AUDIT", row)
+    write_audit_row(
+        spreadsheet_id=AUDIT_SHEET_ID,
+        tab_name="audit_log",
+        audit_row=row,
+    )
