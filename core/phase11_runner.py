@@ -1,8 +1,10 @@
 # core/phase11_runner.py
 
+import threading
 import uuid
 
 from core.level70_pipeline import pipeline
+from core.job_store import create_job, update_job_status
 from core.run_audit_logger import (
     log_run_start,
     log_run_success,
@@ -10,42 +12,35 @@ from core.run_audit_logger import (
 )
 
 
-def run_phase11(payload: dict):
+def run_phase11_background(payload: dict):
     trace_id = str(uuid.uuid4())
     mode = payload.get("mode", "production")
-    phase = "PHASE11"
 
-    log_run_start(
-        trace_id=trace_id,
-        phase=phase,
-        mode=mode,
-    )
+    create_job(trace_id, mode)
 
-    try:
-        result = pipeline.run(payload)
+    def _runner():
+        try:
+            log_run_start(trace_id, "PHASE11", mode)
 
-        rfqs_processed = result.get("processed", 0)
-        rfqs_total = rfqs_processed  # phase-14 has no per-RFQ visibility yet
+            result = pipeline.run(payload)
 
-        log_run_success(
-            trace_id=trace_id,
-            phase=phase,
-            mode=mode,
-            rfqs_total=rfqs_total,
-            rfqs_processed=rfqs_processed,
-        )
+            log_run_success(
+                trace_id=trace_id,
+                phase="PHASE11",
+                mode=mode,
+                rfqs_total=result.get("processed", 0),
+                rfqs_processed=result.get("processed", 0),
+            )
 
-        return {
-            "trace_id": trace_id,
-            "status": "SUCCESS",
-            "result": result,
-        }
+            update_job_status(trace_id, "SUCCESS", result)
 
-    except Exception as e:
-        log_run_failure(
-            trace_id=trace_id,
-            phase=phase,
-            mode=mode,
-            error=e,
-        )
-        raise
+        except Exception as e:
+            log_run_failure(trace_id, "PHASE11", mode, e)
+            update_job_status(trace_id, "FAILED", {"error": str(e)})
+
+    threading.Thread(target=_runner, daemon=True).start()
+
+    return {
+        "status": "ACCEPTED",
+        "trace_id": trace_id,
+    }
