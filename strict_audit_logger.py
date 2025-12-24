@@ -1,8 +1,17 @@
-# strict_audit_logger.py
 import json
-from utils.time_ist import ist_now
+from datetime import datetime, date
 
-def log_audit_event(**event):
-    event["timestamp"] = ist_now().isoformat()  # ← KEY FIX
-    print(json.dumps(event, ensure_ascii=False))
-    return True
+
+def _json_safe(obj):
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
+def log_audit_event(event):
+    safe_event = _json_safe(event)
+    print(json.dumps(safe_event, ensure_ascii=False))
