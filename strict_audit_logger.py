@@ -13,10 +13,21 @@ def _json_safe(obj):
     return obj
 
 
-def log_audit_event(event):
-    # 🔒 convert dataclass → dict FIRST
-    if hasattr(event, "__dataclass_fields__"):
-        event = asdict(event)
+def log_audit_event(event=None, **kwargs):
+    """
+    Supports BOTH:
+    - log_audit_event(event=AuditEvent)
+    - log_audit_event(run_id=..., status=..., ...)
+    """
 
-    safe_event = _json_safe(event)
-    print(json.dumps(safe_event, ensure_ascii=False))
+    if event is not None:
+        # dataclass → dict
+        if hasattr(event, "__dataclass_fields__"):
+            event = asdict(event)
+        data = event
+    else:
+        # kwargs path (pipeline_engine)
+        data = kwargs
+
+    safe_data = _json_safe(data)
+    print(json.dumps(safe_data, ensure_ascii=False))
