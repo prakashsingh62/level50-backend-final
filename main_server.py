@@ -13,7 +13,7 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    return {"status": "OK"}
+    return {"status": "OK", "mode": "LEVEL-80"}
 
 @app.post("/phase11")
 async def phase11(request: Request):
