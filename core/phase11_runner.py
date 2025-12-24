@@ -1,11 +1,10 @@
-from core.pipeline_engine import pipeline
+from pipeline_engine import pipeline
 from core.job_store import create_job, update_job
 
 
 def run_phase11_async(payload: dict):
     trace_id = payload["trace_id"]
 
-    # Create job
     create_job(trace_id)
 
     try:
