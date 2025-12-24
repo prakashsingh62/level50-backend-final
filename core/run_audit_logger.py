@@ -2,10 +2,12 @@
 
 import json
 from datetime import datetime, timezone, timedelta
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 
-from sheet_writer import append_row
-from config import AUDIT_SHEET_ID
+from config import AUDIT_SHEET_ID, CLIENT_SECRET_JSON
 
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 IST = timezone(timedelta(hours=5, minutes=30))
 
 
@@ -13,8 +15,23 @@ def _now_ist():
     return datetime.now(IST).isoformat()
 
 
+def _append_row(sheet_id: str, tab: str, row: list):
+    creds = service_account.Credentials.from_service_account_info(
+        CLIENT_SECRET_JSON, scopes=SCOPES
+    )
+    service = build("sheets", "v4", credentials=creds)
+
+    service.spreadsheets().values().append(
+        spreadsheetId=sheet_id,
+        range=f"{tab}!A1",
+        valueInputOption="RAW",
+        insertDataOption="INSERT_ROWS",
+        body={"values": [row]},
+    ).execute()
+
+
 def log_run_start(trace_id: str, phase: str, mode: str):
-    append_row(
+    _append_row(
         AUDIT_SHEET_ID,
         "audit_log",
         [
@@ -26,13 +43,13 @@ def log_run_start(trace_id: str, phase: str, mode: str):
             "",
             "",
             "",
-            json.dumps({"event": "START"}, ensure_ascii=False),
+            json.dumps({"event": "START"}),
         ],
     )
 
 
-def log_run_success(trace_id: str, phase: str, mode: str, processed: int):
-    append_row(
+def log_run_success(trace_id: str, phase: str, mode: str, total: int, processed: int):
+    _append_row(
         AUDIT_SHEET_ID,
         "audit_log",
         [
@@ -41,19 +58,16 @@ def log_run_success(trace_id: str, phase: str, mode: str, processed: int):
             phase,
             mode,
             "SUCCESS",
+            total,
             processed,
             "",
-            "",
-            json.dumps(
-                {"result": {"status": "OK", "processed": processed}},
-                ensure_ascii=False,
-            ),
+            json.dumps({"status": "OK", "processed": processed}),
         ],
     )
 
 
 def log_run_failure(trace_id: str, phase: str, mode: str, error: Exception):
-    append_row(
+    _append_row(
         AUDIT_SHEET_ID,
         "audit_log",
         [
@@ -65,12 +79,6 @@ def log_run_failure(trace_id: str, phase: str, mode: str, error: Exception):
             "",
             "",
             str(error),
-            json.dumps(
-                {
-                    "error_type": type(error).__name__,
-                    "error_message": str(error),
-                },
-                ensure_ascii=False,
-            ),
+            json.dumps({"error": str(error)}),
         ],
     )
