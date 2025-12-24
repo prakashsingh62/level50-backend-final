@@ -1,20 +1,42 @@
-# core/phase11_runner.py
+# ------------------------------------------------------------
+# PHASE 11 RUNNER (FINAL, STABLE)
+# ------------------------------------------------------------
+# Exports: run_phase11_background
+# ------------------------------------------------------------
 
-from pipeline_engine import pipeline
-from core.job_store import update_job
+import threading
+from core.job_store import job_store
+from core.pipeline import pipeline  # apna actual pipeline import
 
-
-def run_phase11_async(payload: dict):
-    trace_id = payload["trace_id"]
-
+def _run(trace_id: str, payload: dict):
     try:
-        # Run existing pipeline (UNCHANGED)
-        pipeline(payload)
-
-        # Mark job success
-        update_job(trace_id, status="SUCCESS")
-
+        result = pipeline.run(payload)
+        job_store.update_job(
+            trace_id,
+            status="DONE",
+            result=result
+        )
     except Exception as e:
-        # Mark job failure
-        update_job(trace_id, status="FAILED", error=str(e))
-        raise
+        job_store.update_job(
+            trace_id,
+            status="FAILED",
+            error=str(e)
+        )
+
+def run_phase11_background(trace_id: str, payload: dict):
+    """
+    Public API — DO NOT RENAME.
+    Used by main_server.py
+    """
+    job_store.create_job(
+        trace_id=trace_id,
+        status="RUNNING",
+        mode="async"
+    )
+
+    t = threading.Thread(
+        target=_run,
+        args=(trace_id, payload),
+        daemon=True
+    )
+    t.start()
