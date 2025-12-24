@@ -1,26 +1,24 @@
-from pipeline_engine import pipeline
-from core.job_store import create_job, update_job
+from typing import Dict
+from core.level70_pipeline import pipeline
+import traceback
 
+# SIMPLE IN-MEMORY STORE
+JOB_STORE: Dict[str, Dict] = {}
 
-def run_phase11_async(payload: dict):
-    trace_id = payload["trace_id"]
+def run_phase11_background(trace_id: str):
+    job = JOB_STORE.get(trace_id)
 
-    create_job(trace_id)
+    if not job:
+        return
+
+    payload = job.get("payload", {})
 
     try:
-        update_job(trace_id, status="RUNNING")
-
         result = pipeline.run(payload)
 
-        update_job(
-            trace_id,
-            status="DONE",
-            processed=result.get("processed", 0)
-        )
-
+        job["status"] = "DONE"
+        job["processed"] = result.get("processed", 0)
     except Exception as e:
-        update_job(
-            trace_id,
-            status="FAILED",
-            error=str(e)
-        )
+        job["status"] = "FAILED"
+        job["error"] = str(e)
+        job["traceback"] = traceback.format_exc()
