@@ -3,7 +3,7 @@
 import json
 from datetime import datetime, timezone, timedelta
 
-from utils.google_sheets import append_row  # must already exist in your project
+from utils.sheet_updater import append_row_safe as append_row
 from config import AUDIT_SHEET_ID
 
 IST = timezone(timedelta(hours=5, minutes=30))
