@@ -19,6 +19,14 @@ def append_audit_with_alert(
     run_id,
     request_id
 ):
+
+    update_audit_log_trace_id(
+    sheets_service=sheets_service,
+    spreadsheet_id=SHEET_ID,
+    row_number=audit_row_number,
+    trace_id=trace_id
+)
+
     """
     Appends ONE audit row to columns C:G.
 
