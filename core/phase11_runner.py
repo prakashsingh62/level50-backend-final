@@ -1,5 +1,5 @@
 # ------------------------------------------------------------
-# PHASE 11 RUNNER (FINAL, AUDIT-RUNNING + DONE FIXED)
+# PHASE 11 RUNNER (FINAL, PING-SAFE, AUDIT-SAFE)
 # ------------------------------------------------------------
 
 import threading
@@ -14,7 +14,7 @@ from utils.audit_logger import (
 )
 
 from utils.sheet_updater import get_sheets_service
-from config import SHEET_ID
+from config import SHEET_ID, AUDIT_TAB
 
 
 def _run(trace_id: str, payload: dict, audit_row_number: int):
@@ -61,6 +61,25 @@ def _run(trace_id: str, payload: dict, audit_row_number: int):
 
 
 def run_phase11_background(trace_id: str, payload: dict):
+    payload = payload or {}
+
+    # ==========================================================
+    # 🔒 HARD STOP — PING MUST NEVER TOUCH GOOGLE SHEETS
+    # ==========================================================
+    if payload.get("mode") == "ping":
+        job_store.create_job(
+            trace_id=trace_id,
+            status="DONE",
+            mode="ping",
+        )
+        job_store.update_job(
+            trace_id=trace_id,
+            status="DONE",
+            result={"status": "OK", "mode": "PING"},
+            error=None,
+        )
+        return
+
     sheets_service = get_sheets_service()
 
     # ---- JOB CREATED ----
@@ -75,13 +94,13 @@ def run_phase11_background(trace_id: str, payload: dict):
         creds=None,
         sheets_service=sheets_service,
         spreadsheet_id=SHEET_ID,
-        tab_name="audit_log",
+        tab_name=AUDIT_TAB,   # ✅ NO HARDCODE
         audit_row=[
             "phase11",          # PHASE
             payload,            # MODE / PAYLOAD JSON
             "RUNNING",          # STATUS
-            None,               # RFQS_TOTAL
-            None,               # RFQS_PROCESSED
+            "",                 # RFQS_TOTAL (NO NULL)
+            "",                 # RFQS_PROCESSED (NO NULL)
         ],
         run_id="PHASE11",
         request_id=trace_id,
@@ -95,10 +114,10 @@ def run_phase11_background(trace_id: str, payload: dict):
         trace_id=trace_id,
     )
 
-    # ---- FORCE RUNNING STATUS IN SHEET (CRITICAL FIX) ----
+    # ---- FORCE RUNNING STATUS IN SHEET ----
     sheets_service.spreadsheets().values().update(
         spreadsheetId=SHEET_ID,
-        range=f"audit_log!E{audit_row_number}",
+        range=f"{AUDIT_TAB}!E{audit_row_number}",
         valueInputOption="RAW",
         body={"values": [["RUNNING"]]},
     ).execute()
