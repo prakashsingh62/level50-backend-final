@@ -1,118 +1,130 @@
 # ------------------------------------------------------------
-# LEVEL 80 – AUDIT LOGGER (FINAL, FIXED, PROD-SAFE)
-# ------------------------------------------------------------
-# Columns (FIXED):
-# A TIMESTAMP_IST
-# B TRACE_ID
-# C PHASE
-# D MODE
-# E STATUS
-# F RFQS_TOTAL
-# G RFQS_PROCESSED
-# H ROW_NUMBER
-# I ERROR_SUMMARY
-# J DETAILS_JSON
+# AUDIT LOGGER — NULL SAFE, PROD SAFE (FINAL)
 # ------------------------------------------------------------
 
-from utils.time_ist import ist_timestamp
+from googleapiclient.discovery import Resource
 
+
+# ------------------------------------------------------------
+# INTERNAL HELPERS
+# ------------------------------------------------------------
+
+def _safe(value):
+    """
+    Google Sheets DOES NOT accept NULL.
+    Convert None → empty string.
+    """
+    if value is None:
+        return ""
+    return value
+
+
+def _sanitize_row(row):
+    return [_safe(col) for col in row]
+
+
+# ------------------------------------------------------------
+# APPEND AUDIT ROW (INITIAL)
+# ------------------------------------------------------------
 
 def append_audit_with_alert(
+    *,
     creds,
-    sheets_service,
-    spreadsheet_id,
-    tab_name,
-    audit_row,
-    run_id,
-    request_id,
+    sheets_service: Resource,
+    spreadsheet_id: str,
+    tab_name: str,
+    audit_row: list,
+    run_id: str,
+    request_id: str,
 ):
     """
-    Appends ONE audit row.
-    audit_row = [PHASE, MODE, STATUS, RFQS_TOTAL, RFQS_PROCESSED]
-    Returns row_number.
+    Appends a new audit row and returns the row number.
     """
 
-    if not isinstance(audit_row, (list, tuple)) or len(audit_row) != 5:
-        raise ValueError("AUDIT_ROW_MUST_BE_LEN_5")
+    # 🔒 NULL SAFE
+    audit_row = _sanitize_row(audit_row)
 
-    timestamp = ist_timestamp()
-
-    # Exact column alignment A:J
-    values = [[
-        timestamp,          # A TIMESTAMP_IST
-        "",                 # B TRACE_ID (updated later)
-        audit_row[0],       # C PHASE
-        audit_row[1],       # D MODE
-        audit_row[2],       # E STATUS
-        audit_row[3],       # F RFQS_TOTAL
-        audit_row[4],       # G RFQS_PROCESSED
-        "",                 # H ROW_NUMBER (written below)
-        "",                 # I ERROR_SUMMARY
-        "",                 # J DETAILS_JSON
-    ]]
-
-    resp = sheets_service.spreadsheets().values().append(
+    response = sheets_service.spreadsheets().values().append(
         spreadsheetId=spreadsheet_id,
-        range=f"{tab_name}!A:J",
+        range=f"{tab_name}!A1",
         valueInputOption="RAW",
         insertDataOption="INSERT_ROWS",
-        body={"values": values},
+        body={
+            "values": [audit_row]
+        },
     ).execute()
 
-    updated_range = resp["updates"]["updatedRange"]  # audit_log!A12:J12
-    row_number = int(updated_range.split("!")[1].split(":")[0][1:])
+    # Extract appended row number safely
+    updates = response.get("updates", {})
+    updated_range = updates.get("updatedRange", "")
 
-    # Write ROW_NUMBER (H)
-    sheets_service.spreadsheets().values().update(
-        spreadsheetId=spreadsheet_id,
-        range=f"{tab_name}!H{row_number}",
-        valueInputOption="RAW",
-        body={"values": [[row_number]]},
-    ).execute()
+    # Example: LEVEL_80_AUDIT_LOG!A12:E12
+    try:
+        row_number = int(updated_range.split("!")[1].split(":")[0][1:])
+    except Exception:
+        # Absolute fallback (should not happen)
+        row_number = None
 
     return row_number
 
 
+# ------------------------------------------------------------
+# UPDATE TRACE ID IN AUDIT ROW
+# ------------------------------------------------------------
+
 def update_audit_log_trace_id(
-    sheets_service,
-    spreadsheet_id,
-    row_number,
-    trace_id,
+    *,
+    sheets_service: Resource,
+    spreadsheet_id: str,
+    row_number: int,
+    trace_id: str,
 ):
+    """
+    Writes trace_id into column B (or wherever required).
+    """
+
+    if not row_number:
+        return
+
     sheets_service.spreadsheets().values().update(
         spreadsheetId=spreadsheet_id,
-        range=f"audit_log!B{row_number}",
+        range=f"AUDIT!B{row_number}",
         valueInputOption="RAW",
-        body={"values": [[trace_id]]},
+        body={
+            "values": [[_safe(trace_id)]]
+        },
     ).execute()
 
 
+# ------------------------------------------------------------
+# FINAL STATUS UPDATE (DONE / FAILED)
+# ------------------------------------------------------------
+
 def update_audit_log_on_completion(
-    sheets_service,
-    spreadsheet_id,
-    row_number,
-    status,
-    rfqs_processed,
-    details_json,
+    *,
+    sheets_service: Resource,
+    spreadsheet_id: str,
+    row_number: int,
+    status: str,
+    rfqs_processed: int,
+    details_json: dict,
 ):
     """
-    Updates completion fields only.
+    Final audit update after pipeline completion.
     """
 
-    error_summary = ""
-    if status == "FAILED":
-        error_summary = str(details_json)[:300]
+    if not row_number:
+        return
 
     sheets_service.spreadsheets().values().update(
         spreadsheetId=spreadsheet_id,
-        range=f"audit_log!E{row_number}:J{row_number}",
+        range=f"AUDIT!C{row_number}:E{row_number}",
         valueInputOption="RAW",
-        body={"values": [[
-            status,            # E STATUS
-            None,              # F RFQS_TOTAL (unchanged)
-            rfqs_processed,    # G RFQS_PROCESSED
-            row_number,        # H ROW_NUMBER (idempotent)
-            error_summary,     # I ERROR_SUMMARY
-            str(details_json), # J DETAILS_JSON
-        ]]},
+        body={
+            "values": [[
+                _safe(status),
+                _safe(rfqs_processed),
+                _safe(str(details_json)),
+            ]]
+        },
     ).execute()
