@@ -1,15 +1,11 @@
 # ------------------------------------------------------------
-# PHASE 11 RUNNER (FINAL, GUARANTEED, PROD-SAFE)
-# ------------------------------------------------------------
-# - Starts async pipeline
-# - Writes audit row at START
-# - Updates SAME audit row on DONE / FAILED
+# PHASE 11 RUNNER (FINAL, IMPORT-FIXED)
 # ------------------------------------------------------------
 
 import threading
 
 from core.job_store import job_store
-from core.pipeline import pipeline
+from pipeline_engine import pipeline   # ✅ FIXED IMPORT
 
 from utils.audit_logger import (
     append_audit_with_alert,
@@ -25,17 +21,14 @@ def _run(trace_id: str, payload: dict, audit_row_number: int):
     sheets_service = get_sheets_service()
 
     try:
-        # ---- ACTUAL PIPELINE RUN ----
         result = pipeline.run(payload)
 
-        # ---- JOB STORE UPDATE ----
         job_store.update_job(
             trace_id,
             status="DONE",
             result=result
         )
 
-        # ---- AUDIT UPDATE (SUCCESS) ----
         update_audit_log_on_completion(
             sheets_service=sheets_service,
             spreadsheet_id=SHEET_ID,
@@ -46,14 +39,12 @@ def _run(trace_id: str, payload: dict, audit_row_number: int):
         )
 
     except Exception as e:
-        # ---- JOB STORE UPDATE ----
         job_store.update_job(
             trace_id,
             status="FAILED",
             error=str(e)
         )
 
-        # ---- AUDIT UPDATE (FAILED) ----
         update_audit_log_on_completion(
             sheets_service=sheets_service,
             spreadsheet_id=SHEET_ID,
@@ -65,21 +56,14 @@ def _run(trace_id: str, payload: dict, audit_row_number: int):
 
 
 def run_phase11_background(trace_id: str, payload: dict):
-    """
-    Public API — USED BY main_server.py
-    DO NOT RENAME
-    """
-
     sheets_service = get_sheets_service()
 
-    # ---- JOB STORE CREATE ----
     job_store.create_job(
         trace_id=trace_id,
         status="RUNNING",
         mode="async"
     )
 
-    # ---- AUDIT START ROW (C:G) ----
     audit_row_number = append_audit_with_alert(
         creds=None,
         sheets_service=sheets_service,
@@ -96,7 +80,6 @@ def run_phase11_background(trace_id: str, payload: dict):
         request_id=trace_id
     )
 
-    # ---- TRACE_ID UPDATE (B{row}) ----
     update_audit_log_trace_id(
         sheets_service=sheets_service,
         spreadsheet_id=SHEET_ID,
@@ -104,7 +87,6 @@ def run_phase11_background(trace_id: str, payload: dict):
         trace_id=trace_id
     )
 
-    # ---- BACKGROUND THREAD ----
     t = threading.Thread(
         target=_run,
         args=(trace_id, payload, audit_row_number),
