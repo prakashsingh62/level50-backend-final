@@ -53,15 +53,22 @@ def start_phase11(
         "trace_id": trace_id
     }
 
+# ------------------------------------------------------------
+# PHASE 11 STATUS (BROWSER SAFE)
+# ------------------------------------------------------------
+from fastapi import HTTPException
 
-# -----------------------------
-# PHASE 11 PROGRESS
-# -----------------------------
-@app.get("/phase11/progress/{trace_id}")
-def phase11_progress(trace_id: str):
+@app.get("/phase11/status/{trace_id}")
+def get_phase11_status(trace_id: str):
     job = job_store.get_job(trace_id)
 
     if not job:
-        raise HTTPException(status_code=404, detail="Trace ID not found")
+        raise HTTPException(status_code=404, detail="TRACE_ID_NOT_FOUND")
 
-    return job
+    return {
+        "trace_id": trace_id,
+        "status": job.get("status"),
+        "result": job.get("result"),
+        "error": job.get("error"),
+    }
+
