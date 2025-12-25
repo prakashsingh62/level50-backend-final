@@ -1,8 +1,20 @@
 # ------------------------------------------------------------
-# LEVEL 80 – AUDIT LOGGER (FINAL, STABLE)
+# LEVEL 80 – AUDIT LOGGER (FINAL, PROD-SAFE)
+# ------------------------------------------------------------
+# Columns (FIXED):
+# A TIMESTAMP_IST
+# B TRACE_ID
+# C PHASE
+# D MODE
+# E STATUS
+# F RFQS_TOTAL
+# G RFQS_PROCESSED
+# H ROW_NUMBER
+# I ERROR_SUMMARY
+# J DETAILS_JSON
 # ------------------------------------------------------------
 
-from googleapiclient.discovery import build
+from utils.time_ist import ist_timestamp
 
 
 def append_audit_with_alert(
@@ -12,24 +24,39 @@ def append_audit_with_alert(
     tab_name,
     audit_row,
     run_id,
-    request_id
+    request_id,
 ):
     """
-    Appends audit row to C:G
-    Returns row_number (int)
+    Appends ONE audit row (C:G).
+    Returns the row_number where data was written.
     """
 
-    result = sheets_service.spreadsheets().values().append(
+    if not isinstance(audit_row, (list, tuple)) or len(audit_row) != 5:
+        raise ValueError("AUDIT_ROW_MUST_BE_LEN_5")
+
+    timestamp = ist_timestamp()
+
+    values = [[timestamp, "", *audit_row, "", "", ""]]
+
+    resp = sheets_service.spreadsheets().values().append(
         spreadsheetId=spreadsheet_id,
-        range=f"{tab_name}!C:G",
+        range=f"{tab_name}!A:J",
         valueInputOption="RAW",
         insertDataOption="INSERT_ROWS",
-        body={"values": [audit_row]},
+        body={"values": values},
     ).execute()
 
-    updates = result.get("updates", {})
-    updated_range = updates.get("updatedRange")  # audit_log!C8:G8
-    row_number = int(updated_range.split("!")[1][1:].split(":")[0])
+    # Extract row number
+    updated_range = resp["updates"]["updatedRange"]  # audit_log!A12:J12
+    row_number = int(updated_range.split("!")[1].split(":")[0][1:])
+
+    # write ROW_NUMBER column (H)
+    sheets_service.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=f"{tab_name}!H{row_number}",
+        valueInputOption="RAW",
+        body={"values": [[row_number]]},
+    ).execute()
 
     return row_number
 
@@ -38,7 +65,7 @@ def update_audit_log_trace_id(
     sheets_service,
     spreadsheet_id,
     row_number,
-    trace_id
+    trace_id,
 ):
     sheets_service.spreadsheets().values().update(
         spreadsheetId=spreadsheet_id,
@@ -54,17 +81,28 @@ def update_audit_log_on_completion(
     row_number,
     status,
     rfqs_processed,
-    details_json
+    details_json,
 ):
+    """
+    Updates ONLY completion fields.
+    """
+
+    error_summary = None
+    if status == "FAILED":
+        error_summary = str(details_json)[:300]
+
     sheets_service.spreadsheets().values().update(
         spreadsheetId=spreadsheet_id,
-        range=f"audit_log!E{row_number}:G{row_number}",
+        range=f"audit_log!E{row_number}:J{row_number}",
         valueInputOption="RAW",
         body={
             "values": [[
                 status,
+                None,
                 rfqs_processed,
-                str(details_json)
+                row_number,
+                error_summary,
+                str(details_json),
             ]]
         },
     ).execute()
