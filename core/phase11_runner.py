@@ -1,103 +1,113 @@
 # ------------------------------------------------------------
-# PHASE 11 RUNNER (FINAL, STABLE)
+# PHASE 11 RUNNER (FINAL, GUARANTEED, PROD-SAFE)
 # ------------------------------------------------------------
-# Exports: run_phase11_background
+# - Starts async pipeline
+# - Writes audit row at START
+# - Updates SAME audit row on DONE / FAILED
 # ------------------------------------------------------------
 
 import threading
+
 from core.job_store import job_store
-from pipeline_engine import pipeline
+from core.pipeline import pipeline
 
-# OPTIONAL audit imports (safe)
-try:
-    from utils.audit_logger import (
-        append_audit_with_alert,
-        update_audit_log_trace_id,
-    )
-except Exception:
-    append_audit_with_alert = None
-    update_audit_log_trace_id = None
+from utils.audit_logger import (
+    append_audit_with_alert,
+    update_audit_log_trace_id,
+    update_audit_log_on_completion,
+)
+
+from config import SHEET_ID
+from utils.sheets import get_sheets_service
 
 
-def _run(trace_id: str, payload: dict):
+def _run(trace_id: str, payload: dict, audit_row_number: int):
+    sheets_service = get_sheets_service()
+
     try:
+        # ---- ACTUAL PIPELINE RUN ----
         result = pipeline.run(payload)
+
+        # ---- JOB STORE UPDATE ----
         job_store.update_job(
             trace_id,
             status="DONE",
             result=result
         )
+
+        # ---- AUDIT UPDATE (SUCCESS) ----
+        update_audit_log_on_completion(
+            sheets_service=sheets_service,
+            spreadsheet_id=SHEET_ID,
+            row_number=audit_row_number,
+            status="DONE",
+            rfqs_processed=result.get("processed"),
+            details_json=result
+        )
+
     except Exception as e:
+        # ---- JOB STORE UPDATE ----
         job_store.update_job(
             trace_id,
             status="FAILED",
             error=str(e)
         )
 
+        # ---- AUDIT UPDATE (FAILED) ----
+        update_audit_log_on_completion(
+            sheets_service=sheets_service,
+            spreadsheet_id=SHEET_ID,
+            row_number=audit_row_number,
+            status="FAILED",
+            rfqs_processed=0,
+            details_json={"error": str(e)}
+        )
 
-def run_phase11_background(
-    trace_id: str,
-    payload: dict,
-    *,
-    # ---- OPTIONAL AUDIT CONTEXT (PASS ONLY IF AVAILABLE) ----
-    creds=None,
-    sheets_service=None,
-    spreadsheet_id=None,
-    audit_row=None,          # [PHASE, MODE, STATUS, RFQS_TOTAL, RFQS_PROCESSED]
-    audit_row_number=None,   # 1-based row index (Column H)
-    run_id=None,
-    request_id=None,
-):
+
+def run_phase11_background(trace_id: str, payload: dict):
     """
-    Public API — DO NOT RENAME.
-    Used by main_server.py
-
-    Audit behavior:
-    - If audit params are provided, will:
-      1) append audit row (C:G)
-      2) update TRACE_ID in SAME row (B{row_number})
-    - If not provided, runs safely without audit.
+    Public API — USED BY main_server.py
+    DO NOT RENAME
     """
 
-    # ---- JOB STORE (UNCHANGED) ----
+    sheets_service = get_sheets_service()
+
+    # ---- JOB STORE CREATE ----
     job_store.create_job(
         trace_id=trace_id,
         status="RUNNING",
         mode="async"
     )
 
-    # ---- AUDIT: APPEND + TRACE_ID UPDATE (SAFE, OPTIONAL) ----
-    if (
-        append_audit_with_alert
-        and update_audit_log_trace_id
-        and sheets_service
-        and spreadsheet_id
-        and audit_row
-        and audit_row_number
-    ):
-        # 1) Append audit row (C:G)
-        append_audit_with_alert(
-            creds=creds,
-            sheets_service=sheets_service,
-            spreadsheet_id=spreadsheet_id,
-            tab_name="audit_log",
-            audit_row=audit_row,
-            run_id=run_id,
-            request_id=request_id,
-        )
+    # ---- AUDIT START ROW (C:G) ----
+    audit_row_number = append_audit_with_alert(
+        creds=None,
+        sheets_service=sheets_service,
+        spreadsheet_id=SHEET_ID,
+        tab_name="audit_log",
+        audit_row=[
+            "phase11",
+            payload,
+            "RUNNING",
+            None,
+            None
+        ],
+        run_id="PHASE11",
+        request_id=trace_id
+    )
 
-        # 2) Update TRACE_ID in SAME row (B{row})
-        update_audit_log_trace_id(
-            sheets_service=sheets_service,
-            spreadsheet_id=spreadsheet_id,
-            row_number=audit_row_number,
-            trace_id=trace_id,
-        )
+    # ---- TRACE_ID UPDATE (B{row}) ----
+    update_audit_log_trace_id(
+        sheets_service=sheets_service,
+        spreadsheet_id=SHEET_ID,
+        row_number=audit_row_number,
+        trace_id=trace_id
+    )
 
-    # ---- BACKGROUND THREAD (UNCHANGED) ----
+    # ---- BACKGROUND THREAD ----
     t = threading.Thread(
         target=_run,
-        args=(trace_id, payload),
+        args=(trace_id, payload, audit_row_number),
         daemon=True
     )
     t.start()
