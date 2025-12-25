@@ -13,5 +13,12 @@ SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
 SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL")
 EMAIL_RECIPIENTS = os.getenv("EMAIL_RECIPIENTS", "sales@ventilengineering.com")
 
+# ------------------------------------------------------------
+# GLOBAL CONFIG (FINAL)
+# ------------------------------------------------------------
+
+# Google Sheet ID (LEVEL_80_AUDIT_LOG)
+SHEET_ID = "1g4BXp2wa6-vZPxSokAv3v8hwoFiR39fb2bmVNi_y0Mc"
+
 # Mode (optional)
 MODE = os.getenv("MODE", "PROD")
