@@ -1,14 +1,14 @@
-# utils/time_ist.py
-from datetime import datetime
-import pytz
+# ------------------------------------------------------------
+# TIME UTIL — IST (FINAL, PROD-SAFE)
+# ------------------------------------------------------------
 
-IST = pytz.timezone("Asia/Kolkata")
+from datetime import datetime, timezone, timedelta
 
-def ist_now():
-    return datetime.now(IST)
+IST = timezone(timedelta(hours=5, minutes=30))
 
-def ist_date():
-    return ist_now().strftime("%d/%m/%Y")
-
-def ist_time():
-    return ist_now().strftime("%H:%M:%S")
+def ist_timestamp() -> str:
+    """
+    Returns current IST timestamp as ISO string.
+    Example: 25/12/2025 15:10:02
+    """
+    return datetime.now(IST).strftime("%d/%m/%Y %H:%M:%S")
