@@ -5,7 +5,7 @@
 import threading
 
 from core.job_store import job_store
-from pipeline_engine import pipeline   # ✅ FIXED IMPORT
+from pipeline_engine import pipeline   # ✅ CONFIRMED EXISTING
 
 from utils.audit_logger import (
     append_audit_with_alert,
@@ -14,7 +14,7 @@ from utils.audit_logger import (
 )
 
 from config import SHEET_ID
-from utils.sheets import get_sheets_service
+from utils.sheet_updater import get_sheets_service   # ✅ ONLY FIX
 
 
 def _run(trace_id: str, payload: dict, audit_row_number: int):
