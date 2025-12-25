@@ -1,12 +1,13 @@
 # ------------------------------------------------------------
-# MAIN SERVER (FINAL, PROD-SAFE, IMPORT-CLEAN)
+# MAIN SERVER (FINAL, PROD-SAFE)
 # ------------------------------------------------------------
-# - No phase11_runner import at module load
-# - phase11_runner imported ONLY inside route
-# - Railway / Uvicorn safe
+# ✔ NO BackgroundTasks
+# ✔ Pipeline triggered via internal threading (phase11_runner)
+# ✔ Browser-safe status endpoint
+# ✔ Railway / Uvicorn compatible
 # ------------------------------------------------------------
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uuid
 
@@ -20,30 +21,27 @@ job_store = JobStore()
 # REQUEST MODEL
 # -----------------------------
 class Phase11Request(BaseModel):
-    mode: str = "production"   # test | production
+    mode: str = "production"   # ping | production
     rfq_no: str | None = None
     customer: str | None = None
 
 
 # -----------------------------
-# START PHASE 11 (ASYNC)
+# START PHASE 11
 # -----------------------------
 @app.post("/phase11/run")
-def start_phase11(
-    req: Phase11Request,
-    background_tasks: BackgroundTasks
-):
+def start_phase11(req: Phase11Request):
     trace_id = str(uuid.uuid4())
 
-    # 🚨 CRITICAL FIX:
-    # Import ONLY here (never at top of file)
+    # 🔥 CRITICAL:
+    # Import ONLY inside function (prevents boot crash)
     from core.phase11_runner import run_phase11_background
 
     try:
-        background_tasks.add_task(
-            run_phase11_background,
-            trace_id,
-            req.dict()
+        # ✅ DIRECT CALL (NO BackgroundTasks)
+        run_phase11_background(
+            trace_id=trace_id,
+            payload=req.dict()
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -53,11 +51,10 @@ def start_phase11(
         "trace_id": trace_id
     }
 
-# ------------------------------------------------------------
-# PHASE 11 STATUS (BROWSER SAFE)
-# ------------------------------------------------------------
-from fastapi import HTTPException
 
+# -----------------------------
+# PHASE 11 STATUS (BROWSER SAFE)
+# -----------------------------
 @app.get("/phase11/status/{trace_id}")
 def get_phase11_status(trace_id: str):
     job = job_store.get_job(trace_id)
@@ -71,4 +68,3 @@ def get_phase11_status(trace_id: str):
         "result": job.get("result"),
         "error": job.get("error"),
     }
-
