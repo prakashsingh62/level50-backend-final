@@ -30,3 +30,7 @@ def write_audit_row(*, spreadsheet_id: str, tab_name: str, audit_row: list):
         body={"values": [audit_row]},
     ).execute()
 
+# PUBLIC API (DO NOT RENAME)
+def get_sheets_service():
+    return _get_service()
+
