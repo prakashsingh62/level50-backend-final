@@ -1,14 +1,8 @@
 # ------------------------------------------------------------
-# LEVEL 80 – AUDIT LOGGER (FINAL, PROD-SAFE)
-# ------------------------------------------------------------
-# GUARANTEES:
-# - Append audit row ONLY to C:G
-# - Update ONLY TRACE_ID (B)
-# - Update ONLY completion fields (E:F)
-# - No clear(), no overwrite, no header touch
+# LEVEL 80 – AUDIT LOGGER (FINAL, STABLE)
 # ------------------------------------------------------------
 
-from utils.time_ist import ist_date, ist_time
+from googleapiclient.discovery import build
 
 
 def append_audit_with_alert(
@@ -21,41 +15,23 @@ def append_audit_with_alert(
     request_id
 ):
     """
-    Appends ONE audit row to columns C:G.
-    Returns the 1-based row number inserted.
+    Appends audit row to C:G
+    Returns row_number (int)
     """
 
-    if not isinstance(audit_row, (list, tuple)):
-        raise ValueError("AUDIT_ROW_INVALID_TYPE")
+    result = sheets_service.spreadsheets().values().append(
+        spreadsheetId=spreadsheet_id,
+        range=f"{tab_name}!C:G",
+        valueInputOption="RAW",
+        insertDataOption="INSERT_ROWS",
+        body={"values": [audit_row]},
+    ).execute()
 
-    if len(audit_row) != 5:
-        raise ValueError("AUDIT_ROW_INVALID_LENGTH_EXPECTED_5")
+    updates = result.get("updates", {})
+    updated_range = updates.get("updatedRange")  # audit_log!C8:G8
+    row_number = int(updated_range.split("!")[1][1:].split(":")[0])
 
-    body = {
-        "values": [[
-            f"{ist_date()} {ist_time()}",  # C handled by sheet formula or ignored
-            *audit_row
-        ]]
-    }
-
-    try:
-        result = sheets_service.spreadsheets().values().append(
-            spreadsheetId=spreadsheet_id,
-            range=f"{tab_name}!C:G",
-            valueInputOption="RAW",
-            insertDataOption="INSERT_ROWS",
-            body={"values": [list(audit_row)]},
-        ).execute()
-
-        # Extract row number from response
-        updated_range = result.get("updates", {}).get("updatedRange")
-        # Example: audit_log!C7:G7
-        row_number = int(updated_range.split("!")[1].split(":")[0][1:])
-
-        return row_number
-
-    except Exception as e:
-        raise RuntimeError(f"AUDIT_WRITE_FAILED: {str(e)}")
+    return row_number
 
 
 def update_audit_log_trace_id(
@@ -64,20 +40,12 @@ def update_audit_log_trace_id(
     row_number,
     trace_id
 ):
-    """
-    Updates ONLY TRACE_ID cell (Column B).
-    """
-
-    try:
-        sheets_service.spreadsheets().values().update(
-            spreadsheetId=spreadsheet_id,
-            range=f"audit_log!B{row_number}",
-            valueInputOption="RAW",
-            body={"values": [[trace_id]]}
-        ).execute()
-
-    except Exception as e:
-        raise RuntimeError(f"AUDIT_TRACE_ID_UPDATE_FAILED: {str(e)}")
+    sheets_service.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=f"audit_log!B{row_number}",
+        valueInputOption="RAW",
+        body={"values": [[trace_id]]},
+    ).execute()
 
 
 def update_audit_log_on_completion(
@@ -88,24 +56,15 @@ def update_audit_log_on_completion(
     rfqs_processed,
     details_json
 ):
-    """
-    FINAL STATUS UPDATE:
-    - Column E = STATUS
-    - Column F = RFQS_PROCESSED
-    """
-
-    try:
-        sheets_service.spreadsheets().values().update(
-            spreadsheetId=spreadsheet_id,
-            range=f"audit_log!E{row_number}:F{row_number}",
-            valueInputOption="RAW",
-            body={
-                "values": [[
-                    status,
-                    rfqs_processed
-                ]]
-            }
-        ).execute()
-
-    except Exception as e:
-        raise RuntimeError(f"AUDIT_COMPLETION_UPDATE_FAILED: {str(e)}")
+    sheets_service.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=f"audit_log!E{row_number}:G{row_number}",
+        valueInputOption="RAW",
+        body={
+            "values": [[
+                status,
+                rfqs_processed,
+                str(details_json)
+            ]]
+        },
+    ).execute()
