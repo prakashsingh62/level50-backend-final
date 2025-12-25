@@ -8,11 +8,15 @@ import os
 CLIENT_SECRET_JSON = json.loads(os.getenv("CLIENT_SECRET_JSON", "{}"))
 
 # ------------------------------------------------------------
-# PRODUCTION SHEET (MAIN RFQ SHEET)
+# MAIN PRODUCTION SHEET (RFQ)
 # ------------------------------------------------------------
 
 PROD_SHEET_ID = os.getenv("PROD_SHEET_ID")
 PROD_TAB = os.getenv("PROD_TAB")
+
+# 🔒 LEGACY COMPATIBILITY (DO NOT REMOVE)
+# Required by core/phase11_runner.py and others
+SHEET_ID = PROD_SHEET_ID
 
 # ------------------------------------------------------------
 # AUDIT LOG SHEET (LEVEL 80)
