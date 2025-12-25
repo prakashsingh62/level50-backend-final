@@ -6,7 +6,7 @@
 
 import threading
 from core.job_store import job_store
-from core.pipeline import pipeline
+from pipeline_engine import pipeline
 
 # OPTIONAL audit imports (safe)
 try:
