@@ -1,5 +1,5 @@
 # ------------------------------------------------------------
-# LEVEL 80 – AUDIT LOGGER (FINAL, PROD-SAFE)
+# LEVEL 80 – AUDIT LOGGER (FINAL, FIXED, PROD-SAFE)
 # ------------------------------------------------------------
 # Columns (FIXED):
 # A TIMESTAMP_IST
@@ -27,8 +27,9 @@ def append_audit_with_alert(
     request_id,
 ):
     """
-    Appends ONE audit row (C:G).
-    Returns the row_number where data was written.
+    Appends ONE audit row.
+    audit_row = [PHASE, MODE, STATUS, RFQS_TOTAL, RFQS_PROCESSED]
+    Returns row_number.
     """
 
     if not isinstance(audit_row, (list, tuple)) or len(audit_row) != 5:
@@ -36,7 +37,19 @@ def append_audit_with_alert(
 
     timestamp = ist_timestamp()
 
-    values = [[timestamp, "", *audit_row, "", "", ""]]
+    # Exact column alignment A:J
+    values = [[
+        timestamp,          # A TIMESTAMP_IST
+        "",                 # B TRACE_ID (updated later)
+        audit_row[0],       # C PHASE
+        audit_row[1],       # D MODE
+        audit_row[2],       # E STATUS
+        audit_row[3],       # F RFQS_TOTAL
+        audit_row[4],       # G RFQS_PROCESSED
+        "",                 # H ROW_NUMBER (written below)
+        "",                 # I ERROR_SUMMARY
+        "",                 # J DETAILS_JSON
+    ]]
 
     resp = sheets_service.spreadsheets().values().append(
         spreadsheetId=spreadsheet_id,
@@ -46,11 +59,10 @@ def append_audit_with_alert(
         body={"values": values},
     ).execute()
 
-    # Extract row number
     updated_range = resp["updates"]["updatedRange"]  # audit_log!A12:J12
     row_number = int(updated_range.split("!")[1].split(":")[0][1:])
 
-    # write ROW_NUMBER column (H)
+    # Write ROW_NUMBER (H)
     sheets_service.spreadsheets().values().update(
         spreadsheetId=spreadsheet_id,
         range=f"{tab_name}!H{row_number}",
@@ -84,10 +96,10 @@ def update_audit_log_on_completion(
     details_json,
 ):
     """
-    Updates ONLY completion fields.
+    Updates completion fields only.
     """
 
-    error_summary = None
+    error_summary = ""
     if status == "FAILED":
         error_summary = str(details_json)[:300]
 
@@ -95,14 +107,12 @@ def update_audit_log_on_completion(
         spreadsheetId=spreadsheet_id,
         range=f"audit_log!E{row_number}:J{row_number}",
         valueInputOption="RAW",
-        body={
-            "values": [[
-                status,
-                None,
-                rfqs_processed,
-                row_number,
-                error_summary,
-                str(details_json),
-            ]]
-        },
+        body={"values": [[
+            status,            # E STATUS
+            None,              # F RFQS_TOTAL (unchanged)
+            rfqs_processed,    # G RFQS_PROCESSED
+            row_number,        # H ROW_NUMBER (idempotent)
+            error_summary,     # I ERROR_SUMMARY
+            str(details_json), # J DETAILS_JSON
+        ]]},
     ).execute()
