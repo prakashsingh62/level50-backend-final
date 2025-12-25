@@ -36,6 +36,7 @@ def _run(trace_id: str, payload: dict, audit_row_number: int):
         update_audit_log_on_completion(
             sheets_service=sheets_service,
             spreadsheet_id=SHEET_ID,
+            tab_name=AUDIT_TAB,            # ✅ REQUIRED
             row_number=audit_row_number,
             status="DONE",
             rfqs_processed=result.get("processed", 0),
@@ -53,6 +54,7 @@ def _run(trace_id: str, payload: dict, audit_row_number: int):
         update_audit_log_on_completion(
             sheets_service=sheets_service,
             spreadsheet_id=SHEET_ID,
+            tab_name=AUDIT_TAB,            # ✅ REQUIRED
             row_number=audit_row_number,
             status="FAILED",
             rfqs_processed=0,
@@ -110,6 +112,7 @@ def run_phase11_background(trace_id: str, payload: dict):
     update_audit_log_trace_id(
         sheets_service=sheets_service,
         spreadsheet_id=SHEET_ID,
+        tab_name=AUDIT_TAB,            # ✅ REQUIRED
         row_number=audit_row_number,
         trace_id=trace_id,
     )
