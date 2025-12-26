@@ -1,26 +1,26 @@
 # ------------------------------------------------------------
-# PHASE 11 RUNNER
-# FINAL, PING-SAFE, AUDIT-SAFE, HANG-PROOF
+# PHASE 11 RUNNER — FINAL, PROD-SAFE, AUDIT-GUARANTEED
 # ------------------------------------------------------------
 
 import threading
 
-from core.job_store import job_store
 from pipeline_engine import pipeline
-from utils.sheet_updater import get_sheets_service
+from core.job_store import job_store
+
 from utils.audit_logger import (
     append_audit_with_alert,
     update_audit_log_trace_id,
     update_audit_log_on_completion,
 )
+
+from utils.sheet_updater import get_sheets_service
 from config import SHEET_ID, AUDIT_TAB
 
 
-def _run(trace_id: str, payload: dict, audit_row_number: int):
-    sheets_service = get_sheets_service()
+def _run(trace_id: str, payload: dict, audit_row: int):
+    sheets = get_sheets_service()
 
     try:
-        # ---- ACTUAL PIPELINE RUN ----
         result = pipeline.run(payload)
 
         job_store.update_job(
@@ -31,10 +31,10 @@ def _run(trace_id: str, payload: dict, audit_row_number: int):
         )
 
         update_audit_log_on_completion(
-            sheets_service=sheets_service,
+            sheets_service=sheets,
             spreadsheet_id=SHEET_ID,
             tab_name=AUDIT_TAB,
-            row_number=audit_row_number,
+            row_number=audit_row,
             status="DONE",
             rfqs_processed=result.get("processed", 0),
             details_json=result,
@@ -49,10 +49,10 @@ def _run(trace_id: str, payload: dict, audit_row_number: int):
         )
 
         update_audit_log_on_completion(
-            sheets_service=sheets_service,
+            sheets_service=sheets,
             spreadsheet_id=SHEET_ID,
             tab_name=AUDIT_TAB,
-            row_number=audit_row_number,
+            row_number=audit_row,
             status="FAILED",
             rfqs_processed=0,
             details_json={"error": str(e)},
@@ -62,33 +62,20 @@ def _run(trace_id: str, payload: dict, audit_row_number: int):
 def run_phase11_background(trace_id: str, payload: dict):
     payload = payload or {}
 
-    # ==========================================================
-    # 🔒 HARD STOP — PING NEVER TOUCHES GOOGLE SHEETS
-    # ==========================================================
+    # -------------------------------
+    # PING MODE (NO SHEETS)
+    # -------------------------------
     if payload.get("mode") == "ping":
-        job_store.create_job(
-            trace_id=trace_id,
-            status="DONE",
-            mode="ping",
-        )
-        job_store.update_job(
-            trace_id=trace_id,
-            status="DONE",
-            result={"status": "OK", "mode": "PING"},
-            error=None,
-        )
+        job_store.create_job(trace_id, "DONE", mode="ping")
+        job_store.update_job(trace_id, "DONE", {"status": "OK"}, None)
         return
 
-    sheets_service = get_sheets_service()
+    sheets = get_sheets_service()
 
-    job_store.create_job(
-        trace_id=trace_id,
-        status="RUNNING",
-        mode="async",
-    )
+    job_store.create_job(trace_id, "RUNNING", mode="async")
 
-    audit_row_number = append_audit_with_alert(
-        sheets_service=sheets_service,
+    audit_row = append_audit_with_alert(
+        sheets_service=sheets,
         spreadsheet_id=SHEET_ID,
         tab_name=AUDIT_TAB,
         audit_row=[
@@ -103,28 +90,16 @@ def run_phase11_background(trace_id: str, payload: dict):
     )
 
     update_audit_log_trace_id(
-        sheets_service=sheets_service,
+        sheets_service=sheets,
         spreadsheet_id=SHEET_ID,
         tab_name=AUDIT_TAB,
-        row_number=audit_row_number,
+        row_number=audit_row,
         trace_id=trace_id,
     )
 
-    # ---- FORCE STATUS WRITE (NO NULLS) ----
-    if audit_row_number:
-        try:
-            sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{AUDIT_TAB}!E{audit_row_number}",
-                valueInputOption="RAW",
-                body={"values": [["RUNNING"]]},
-            ).execute()
-        except Exception:
-            pass
-
     t = threading.Thread(
         target=_run,
-        args=(trace_id, payload, audit_row_number),
+        args=(trace_id, payload, audit_row),
         daemon=True,
     )
     t.start()
