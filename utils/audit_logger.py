@@ -1,9 +1,11 @@
+# ------------------------------------------------------------
+# AUDIT LOGGER — LEVEL 80
+# FINAL, NULL-SAFE, PROD-SAFE
+# ------------------------------------------------------------
+
 from datetime import datetime
 from googleapiclient.discovery import Resource
-
-# ============================================================
-# AUDIT LOGGER — HARD-SAFE, BACKWARD-COMPATIBLE
-# ============================================================
+from config import AUDIT_TAB
 
 
 def append_audit_with_alert(
@@ -14,18 +16,21 @@ def append_audit_with_alert(
     audit_row: list,
     run_id: str,
     request_id: str,
-    **_ignored,  # 🔒 absorbs legacy args like creds
 ):
+    """
+    Appends a new audit row.
+    MUST NEVER RAISE.
+    Returns row_number or None.
+    """
     try:
         values = [[
-            datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-            request_id,
-            run_id,
-            audit_row[0],   # PHASE
-            audit_row[1],   # MODE / PAYLOAD
-            audit_row[2],   # STATUS
-            audit_row[3],   # RFQS_TOTAL
-            audit_row[4],   # RFQS_PROCESSED
+            datetime.now().strftime("%d/%m/%Y %H:%M:%S"),  # TIMESTAMP_IST
+            request_id,                                  # TRACE_ID
+            run_id,                                      # PHASE
+            audit_row[1],                                # MODE / PAYLOAD
+            audit_row[2],                                # STATUS
+            audit_row[3] or "",                          # RFQS_TOTAL
+            audit_row[4] or "",                          # RFQS_PROCESSED
         ]]
 
         result = sheets_service.spreadsheets().values().append(
@@ -37,11 +42,12 @@ def append_audit_with_alert(
         ).execute()
 
         updated_range = result["updates"]["updatedRange"]
+        # Example: LEVEL_80_AUDIT_LOG!A12:G12
         row_number = int(updated_range.split("!")[1].split(":")[0][1:])
         return row_number
 
     except Exception:
-        # 🔒 audit must NEVER break pipeline
+        # 🔒 HARD SAFETY — audit must never break prod
         return None
 
 
@@ -52,7 +58,6 @@ def update_audit_log_trace_id(
     tab_name: str,
     row_number: int,
     trace_id: str,
-    **_ignored,
 ):
     if not row_number:
         return
@@ -65,7 +70,7 @@ def update_audit_log_trace_id(
             body={"values": [[trace_id]]},
         ).execute()
     except Exception:
-        pass
+        return
 
 
 def update_audit_log_on_completion(
@@ -77,7 +82,6 @@ def update_audit_log_on_completion(
     status: str,
     rfqs_processed: int,
     details_json: dict,
-    **_ignored,
 ):
     if not row_number:
         return
@@ -85,9 +89,9 @@ def update_audit_log_on_completion(
     try:
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range=f"{tab_name}!F{row_number}:G{row_number}",
+            range=f"{tab_name}!E{row_number}:G{row_number}",
             valueInputOption="RAW",
-            body={"values": [[status, rfqs_processed]]},
+            body={"values": [[status, "", rfqs_processed]]},
         ).execute()
     except Exception:
-        pass
+        return
