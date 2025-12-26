@@ -12,19 +12,18 @@ class Level70Pipeline:
     def run(self, payload=None):
         payload = payload or {}
 
-        # --------------------------------------------------
-        # PING / HEALTH MODE
-        # --------------------------------------------------
+        # -------------------------------
+        # PING MODE
+        # -------------------------------
         if payload.get("mode") == "ping":
             return {
                 "status": "OK",
-                "mode": "PING",
-                "message": "Pipeline reachable"
+                "mode": "PING"
             }
 
-        # --------------------------------------------------
-        # READ RFQs (FAIL-SAFE, NO HANG)
-        # --------------------------------------------------
+        # -------------------------------
+        # READ RFQs
+        # -------------------------------
         try:
             rfqs = read_rfqs(payload)
         except Exception as e:
@@ -37,16 +36,15 @@ class Level70Pipeline:
         if not rfqs:
             return {
                 "status": "NO_OP",
-                "processed": 0,
-                "reason": "No RFQs resolved from payload"
+                "processed": 0
             }
 
         if isinstance(rfqs, dict):
             rfqs = [rfqs]
 
-        # --------------------------------------------------
-        # PROCESS RFQs
-        # --------------------------------------------------
+        # -------------------------------
+        # PROCESS
+        # -------------------------------
         processed = 0
 
         for rfq in rfqs:
@@ -54,21 +52,18 @@ class Level70Pipeline:
                 classify_rfq(rfq)
                 write_sheet(rfq)
                 processed += 1
-
             except Exception:
-                # 🔒 ONE RFQ FAILURE MUST NOT BREAK PIPELINE
+                # NEVER CRASH PIPELINE
                 continue
 
-        # --------------------------------------------------
-        # FINAL RETURN (ALWAYS REACHED)
-        # --------------------------------------------------
+        # -------------------------------
+        # FINAL
+        # -------------------------------
         return {
             "status": "OK",
             "processed": processed
         }
 
 
-# ------------------------------------------------------------
-# REQUIRED PIPELINE SINGLETON
-# ------------------------------------------------------------
+# REQUIRED SINGLETON
 pipeline = Level70Pipeline()
