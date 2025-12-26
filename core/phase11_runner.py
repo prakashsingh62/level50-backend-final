@@ -93,7 +93,6 @@ def run_phase11_background(trace_id: str, payload: dict):
 
     # ---- AUDIT ROW APPEND (INITIAL) ----
     audit_row_number = append_audit_with_alert(
-        creds=None,
         sheets_service=sheets_service,
         spreadsheet_id=SHEET_ID,
         tab_name=AUDIT_TAB,   # ✅ NO HARDCODE
