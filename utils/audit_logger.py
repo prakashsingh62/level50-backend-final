@@ -1,27 +1,7 @@
-# utils/audit_logger.py
-import datetime
+from datetime import datetime
 from googleapiclient.discovery import Resource
+from config import AUDIT_TAB
 
-# ------------------------------------------------------------
-# HELPERS
-# ------------------------------------------------------------
-
-def _now_ist():
-    return datetime.datetime.utcnow().isoformat()
-
-def _safe(val):
-    if val is None:
-        return ""
-    return str(val)
-
-def _extract_row_number(updated_range: str) -> int:
-    # Example: LEVEL_80_AUDIT_LOG!A12:E12
-    return int(updated_range.split("!")[1].split(":")[0][1:])
-
-
-# ------------------------------------------------------------
-# APPEND AUDIT (INITIAL)
-# ------------------------------------------------------------
 
 def append_audit_with_alert(
     *,
@@ -31,37 +11,31 @@ def append_audit_with_alert(
     audit_row: list,
     run_id: str,
     request_id: str,
-    creds=None,  # kept for compatibility
 ):
     values = [[
-        _now_ist(),            # TIMESTAMP_IST
-        request_id,            # TRACE_ID
-        run_id,                # PHASE
-        _safe(audit_row[1]),   # MODE / PAYLOAD
-        "RUNNING",             # STATUS
-        "",                    # RFQS_TOTAL
-        "",                    # RFQS_PROCESSED
+        datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+        request_id,
+        run_id,
+        audit_row[1],   # MODE / PAYLOAD
+        audit_row[2],   # STATUS
+        audit_row[3],   # RFQS_TOTAL
+        audit_row[4],   # RFQS_PROCESSED
     ]]
 
-    result = (
-        sheets_service.spreadsheets()
-        .values()
-        .append(
-            spreadsheetId=spreadsheet_id,
-            range=f"{tab_name}!A:G",   # ✅ IMPORTANT FIX
-            valueInputOption="RAW",
-            insertDataOption="INSERT_ROWS",
-            body={"values": values},
-        )
-        .execute()
-    )
+    result = sheets_service.spreadsheets().values().append(
+        spreadsheetId=spreadsheet_id,
+        range=f"{tab_name}",
+        valueInputOption="RAW",
+        insertDataOption="INSERT_ROWS",
+        body={"values": values},
+    ).execute()
 
-    return _extract_row_number(result["updates"]["updatedRange"])
+    # Extract row number safely
+    updated_range = result["updates"]["updatedRange"]
+    # Example: LEVEL_80_AUDIT_LOG!A12:G12
+    row_number = int(updated_range.split("!")[1].split(":")[0][1:])
+    return row_number
 
-
-# ------------------------------------------------------------
-# UPDATE TRACE ID
-# ------------------------------------------------------------
 
 def update_audit_log_trace_id(
     *,
@@ -72,15 +46,11 @@ def update_audit_log_trace_id(
 ):
     sheets_service.spreadsheets().values().update(
         spreadsheetId=spreadsheet_id,
-        range=f"AUDIT_80_AUDIT_LOG!B{row_number}",
+        range=f"{AUDIT_TAB}!B{row_number}",
         valueInputOption="RAW",
         body={"values": [[trace_id]]},
     ).execute()
 
-
-# ------------------------------------------------------------
-# FINAL STATUS UPDATE
-# ------------------------------------------------------------
 
 def update_audit_log_on_completion(
     *,
@@ -93,13 +63,7 @@ def update_audit_log_on_completion(
 ):
     sheets_service.spreadsheets().values().update(
         spreadsheetId=spreadsheet_id,
-        range=f"LEVEL_80_AUDIT_LOG!E{row_number}:G{row_number}",
+        range=f"{AUDIT_TAB}!E{row_number}:G{row_number}",
         valueInputOption="RAW",
-        body={
-            "values": [[
-                status,
-                _safe(details_json.get("processed", "")),
-                _safe(rfqs_processed),
-            ]]
-        },
+        body={"values": [[status, "", rfqs_processed]]},
     ).execute()
