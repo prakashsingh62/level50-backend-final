@@ -23,18 +23,18 @@ PROD_TAB = os.getenv("PROD_TAB")
 SHEET_ID = PROD_SHEET_ID
 
 # ============================================================
-# AUDIT LOG SHEET (LEVEL 80)
+# AUDIT LOG SHEET (LEVEL 80) — 🔥 HARD FIX
 # ============================================================
 
+# Spreadsheet ID (can stay env-driven)
 AUDIT_SHEET_ID = os.getenv(
     "AUDIT_SHEET_ID",
     "1g4BXp2wa6-vZPxSokAv3v8hwoFiR39fb2bmVNi_y0Mc"
 )
 
-AUDIT_TAB = os.getenv(
-    "AUDIT_TAB",
-    "LEVEL_80_AUDIT_LOG"
-)
+# ❗ HARD-CODED TAB NAME (DO NOT USE getenv HERE)
+# This EXACT name exists in Google Sheets
+AUDIT_TAB = "LEVEL_80_AUDIT_LOG"
 
 # ============================================================
 # MODE
