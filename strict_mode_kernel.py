@@ -5,8 +5,6 @@
 
 import sys
 import datetime
-from strict_audit_logger import write_audit
-
 
 def _now_ist():
     return (datetime.datetime.utcnow() +
