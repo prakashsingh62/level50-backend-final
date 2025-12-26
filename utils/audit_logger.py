@@ -24,17 +24,22 @@ def append_audit_with_alert(
 
     result = sheets_service.spreadsheets().values().append(
         spreadsheetId=spreadsheet_id,
-        range=f"{tab_name}",
+        range=f"{tab_name}!A:G",   # ✅ EXPLICIT RANGE (IMPORTANT)
         valueInputOption="RAW",
         insertDataOption="INSERT_ROWS",
         body={"values": values},
     ).execute()
 
-    # Extract row number safely
-    updated_range = result["updates"]["updatedRange"]
-    # Example: LEVEL_80_AUDIT_LOG!A12:G12
-    row_number = int(updated_range.split("!")[1].split(":")[0][1:])
-    return row_number
+    # ✅ SAFE ROW EXTRACTION
+    try:
+        updated_range = result.get("updates", {}).get("updatedRange")
+        if not updated_range:
+            return None
+        # Example: LEVEL_80_AUDIT_LOG!A12:G12
+        row_part = updated_range.split("!")[1].split(":")[0]
+        return int("".join(filter(str.isdigit, row_part)))
+    except Exception:
+        return None
 
 
 def update_audit_log_trace_id(
@@ -44,6 +49,9 @@ def update_audit_log_trace_id(
     row_number: int,
     trace_id: str,
 ):
+    if not row_number:
+        return
+
     sheets_service.spreadsheets().values().update(
         spreadsheetId=spreadsheet_id,
         range=f"{AUDIT_TAB}!B{row_number}",
@@ -54,13 +62,17 @@ def update_audit_log_trace_id(
 
 def update_audit_log_on_completion(
     *,
-    sheets_service: Resource,
+    sheets_service,
     spreadsheet_id: str,
-    row_number: int,
+    row_number,
     status: str,
     rfqs_processed: int,
     details_json: dict,
 ):
+    if not row_number:
+        # 🔒 audit must NEVER break production
+        return
+
     sheets_service.spreadsheets().values().update(
         spreadsheetId=spreadsheet_id,
         range=f"{AUDIT_TAB}!E{row_number}:G{row_number}",
