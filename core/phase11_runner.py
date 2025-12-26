@@ -1,5 +1,5 @@
 # ------------------------------------------------------------
-# PHASE 11 RUNNER (FINAL, PING-SAFE, AUDIT-SAFE)
+# PHASE 11 RUNNER — FINAL, AUDIT-ISOLATED, PROD-SAFE
 # ------------------------------------------------------------
 
 import threading
@@ -14,17 +14,15 @@ from utils.audit_logger import (
 )
 
 from utils.sheet_updater import get_sheets_service
-from config import SHEET_ID, AUDIT_SHEET_ID, AUDIT_TAB
+from config import SHEET_ID, AUDIT_TAB
 
 
 def _run(trace_id: str, payload: dict, audit_row_number: int):
     sheets_service = get_sheets_service()
 
     try:
-        # ---- ACTUAL PIPELINE RUN ----
         result = pipeline.run(payload)
 
-        # ---- JOB STORE UPDATE ----
         job_store.update_job(
             trace_id=trace_id,
             status="DONE",
@@ -32,10 +30,10 @@ def _run(trace_id: str, payload: dict, audit_row_number: int):
             error=None,
         )
 
-        # ---- AUDIT FINAL UPDATE (DONE) ----
         update_audit_log_on_completion(
             sheets_service=sheets_service,
-            spreadsheet_id=AUDIT_SHEET_ID,   # ✅ FIX
+            spreadsheet_id=SHEET_ID,
+            tab_name=AUDIT_TAB,
             row_number=audit_row_number,
             status="DONE",
             rfqs_processed=result.get("processed", 0),
@@ -52,7 +50,8 @@ def _run(trace_id: str, payload: dict, audit_row_number: int):
 
         update_audit_log_on_completion(
             sheets_service=sheets_service,
-            spreadsheet_id=AUDIT_SHEET_ID,   # ✅ FIX
+            spreadsheet_id=SHEET_ID,
+            tab_name=AUDIT_TAB,
             row_number=audit_row_number,
             status="FAILED",
             rfqs_processed=0,
@@ -63,15 +62,9 @@ def _run(trace_id: str, payload: dict, audit_row_number: int):
 def run_phase11_background(trace_id: str, payload: dict):
     payload = payload or {}
 
-    # ==========================================================
-    # 🔒 HARD STOP — PING MUST NEVER TOUCH GOOGLE SHEETS
-    # ==========================================================
+    # 🔒 PING NEVER TOUCHES SHEETS
     if payload.get("mode") == "ping":
-        job_store.create_job(
-            trace_id=trace_id,
-            status="DONE",
-            mode="ping",
-        )
+        job_store.create_job(trace_id=trace_id, status="DONE", mode="ping")
         job_store.update_job(
             trace_id=trace_id,
             status="DONE",
@@ -80,48 +73,41 @@ def run_phase11_background(trace_id: str, payload: dict):
         )
         return
 
-    sheets_service = get_sheets_service()
-
-    # ---- JOB CREATED ----
     job_store.create_job(
         trace_id=trace_id,
         status="RUNNING",
         mode="async",
     )
 
-    # ---- AUDIT ROW APPEND (INITIAL) ----
-    audit_row_number = append_audit_with_alert(
-        sheets_service=sheets_service,
-        spreadsheet_id=AUDIT_SHEET_ID,   # ✅ FIX
-        tab_name=AUDIT_TAB,
-        audit_row=[
-            "phase11",
-            payload,
-            "RUNNING",
-            "",
-            "",
-        ],
-        run_id="PHASE11",
-        request_id=trace_id,
-    )
+    sheets_service = get_sheets_service()
 
-    # ---- TRACE ID WRITE ----
+    # 🔒 AUDIT APPEND — ISOLATED
+    try:
+        audit_row_number = append_audit_with_alert(
+            sheets_service=sheets_service,
+            spreadsheet_id=SHEET_ID,
+            tab_name=AUDIT_TAB,
+            audit_row=[
+                "PHASE11",
+                payload,
+                "RUNNING",
+                "",
+                "",
+            ],
+            run_id="PHASE11",
+            request_id=trace_id,
+        )
+    except Exception:
+        audit_row_number = None
+
     update_audit_log_trace_id(
         sheets_service=sheets_service,
-        spreadsheet_id=AUDIT_SHEET_ID,   # ✅ FIX
+        spreadsheet_id=SHEET_ID,
+        tab_name=AUDIT_TAB,
         row_number=audit_row_number,
         trace_id=trace_id,
     )
 
-    # ---- FORCE RUNNING STATUS IN AUDIT SHEET ----
-    sheets_service.spreadsheets().values().update(
-        spreadsheetId=AUDIT_SHEET_ID,    # ✅ FIX
-        range=f"{AUDIT_TAB}!E{audit_row_number}",
-        valueInputOption="RAW",
-        body={"values": [["RUNNING"]]},
-    ).execute()
-
-    # ---- BACKGROUND THREAD ----
     t = threading.Thread(
         target=_run,
         args=(trace_id, payload, audit_row_number),
