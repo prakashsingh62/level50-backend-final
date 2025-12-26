@@ -7,6 +7,7 @@ from sheet_reader import read_rfqs
 from classify import classify_rfq
 from sheet_writer import write_sheet
 
+
 class Level70Pipeline:
     def run(self, payload=None):
         payload = payload or {}
@@ -27,7 +28,6 @@ class Level70Pipeline:
         try:
             rfqs = read_rfqs(payload)
         except Exception as e:
-            # 🔴 CRITICAL: NEVER HANG HERE
             return {
                 "status": "FAILED",
                 "processed": 0,
@@ -52,34 +52,12 @@ class Level70Pipeline:
         for rfq in rfqs:
             try:
                 classify_rfq(rfq)
-
-                rows = write_sheet(rfq)
-
-                log_audit_event(
-                    run_id="PHASE11",
-                    status="OK",
-                    rfq_no=rfq.get("rfq_no"),
-                    uid_no=rfq.get("uid"),
-                    customer=rfq.get("customer"),
-                    vendor=rfq.get("vendor"),
-                    step="COMPLETE",
-                    rows_written=rows
-                )
-
+                write_sheet(rfq)
                 processed += 1
 
-            except Exception as e:
-                # 🔴 ONE RFQ FAIL SHOULD NOT HANG PIPELINE
-                log_audit_event(
-                    run_id="PHASE11",
-                    status="FAILED",
-                    rfq_no=rfq.get("rfq_no"),
-                    uid_no=rfq.get("uid"),
-                    customer=rfq.get("customer"),
-                    vendor=rfq.get("vendor"),
-                    step="ERROR",
-                    rows_written=0
-                )
+            except Exception:
+                # 🔒 ONE RFQ FAILURE MUST NOT BREAK PIPELINE
+                continue
 
         # --------------------------------------------------
         # FINAL RETURN (ALWAYS REACHED)
