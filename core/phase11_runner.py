@@ -14,7 +14,7 @@ from utils.audit_logger import (
 )
 
 from utils.sheet_updater import get_sheets_service
-from config import SHEET_ID, AUDIT_TAB
+from config import SHEET_ID, AUDIT_SHEET_ID, AUDIT_TAB
 
 
 def _run(trace_id: str, payload: dict, audit_row_number: int):
@@ -35,8 +35,7 @@ def _run(trace_id: str, payload: dict, audit_row_number: int):
         # ---- AUDIT FINAL UPDATE (DONE) ----
         update_audit_log_on_completion(
             sheets_service=sheets_service,
-            spreadsheet_id=SHEET_ID,
-            tab_name=AUDIT_TAB,            # ✅ REQUIRED
+            spreadsheet_id=AUDIT_SHEET_ID,   # ✅ FIX
             row_number=audit_row_number,
             status="DONE",
             rfqs_processed=result.get("processed", 0),
@@ -53,8 +52,7 @@ def _run(trace_id: str, payload: dict, audit_row_number: int):
 
         update_audit_log_on_completion(
             sheets_service=sheets_service,
-            spreadsheet_id=SHEET_ID,
-            tab_name=AUDIT_TAB,            # ✅ REQUIRED
+            spreadsheet_id=AUDIT_SHEET_ID,   # ✅ FIX
             row_number=audit_row_number,
             status="FAILED",
             rfqs_processed=0,
@@ -94,14 +92,14 @@ def run_phase11_background(trace_id: str, payload: dict):
     # ---- AUDIT ROW APPEND (INITIAL) ----
     audit_row_number = append_audit_with_alert(
         sheets_service=sheets_service,
-        spreadsheet_id=SHEET_ID,
-        tab_name=AUDIT_TAB,   # ✅ NO HARDCODE
+        spreadsheet_id=AUDIT_SHEET_ID,   # ✅ FIX
+        tab_name=AUDIT_TAB,
         audit_row=[
-            "phase11",          # PHASE
-            payload,            # MODE / PAYLOAD JSON
-            "RUNNING",          # STATUS
-            "",                 # RFQS_TOTAL (NO NULL)
-            "",                 # RFQS_PROCESSED (NO NULL)
+            "phase11",
+            payload,
+            "RUNNING",
+            "",
+            "",
         ],
         run_id="PHASE11",
         request_id=trace_id,
@@ -110,15 +108,14 @@ def run_phase11_background(trace_id: str, payload: dict):
     # ---- TRACE ID WRITE ----
     update_audit_log_trace_id(
         sheets_service=sheets_service,
-        spreadsheet_id=SHEET_ID,
-        tab_name=AUDIT_TAB,            # ✅ REQUIRED
+        spreadsheet_id=AUDIT_SHEET_ID,   # ✅ FIX
         row_number=audit_row_number,
         trace_id=trace_id,
     )
 
-    # ---- FORCE RUNNING STATUS IN SHEET ----
+    # ---- FORCE RUNNING STATUS IN AUDIT SHEET ----
     sheets_service.spreadsheets().values().update(
-        spreadsheetId=SHEET_ID,
+        spreadsheetId=AUDIT_SHEET_ID,    # ✅ FIX
         range=f"{AUDIT_TAB}!E{audit_row_number}",
         valueInputOption="RAW",
         body={"values": [["RUNNING"]]},
