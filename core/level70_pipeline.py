@@ -1,6 +1,5 @@
 from sheet_reader import read_rfqs
 from sheet_writer import write_sheet
-from strict_audit_logger import log_audit_event
 from classify import classify_rfq
 from core.contracts import AuditEvent
 from datetime import datetime
