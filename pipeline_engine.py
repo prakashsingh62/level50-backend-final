@@ -6,8 +6,6 @@
 from sheet_reader import read_rfqs
 from classify import classify_rfq
 from sheet_writer import write_sheet
-from strict_audit_logger import log_audit_event
-
 
 class Level70Pipeline:
     def run(self, payload=None):
