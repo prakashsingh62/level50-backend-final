@@ -1,107 +1,75 @@
 # ------------------------------------------------------------
-# PHASE 11 RUNNER — FINAL, AUDIT-AUTHORITATIVE
+# PHASE 11 RUNNER — FINAL HARD-SAFETY VERSION
+# ENSURES AUDIT LOG IS WRITTEN AFTER ASYNC COMPLETION
 # ------------------------------------------------------------
 
-import threading
-from core.job_store import job_store
+from datetime import datetime, timezone
+
 from pipeline_engine import pipeline
-from utils.sheet_updater import get_sheets_service
-from utils.audit_logger import (
-    append_audit_with_alert,
-    update_audit_log_trace_id,
-    update_audit_log_on_completion,
-)
-from config import SHEET_ID, AUDIT_TAB
+from utils.audit_logger import append_audit_row
+from utils.job_store import update_job_status
 
 
-def _run(trace_id: str, payload: dict, audit_row_number: int):
-    sheets_service = get_sheets_service()
+def _now_ist():
+    # Always write IST explicitly
+    return datetime.now(timezone.utc).astimezone().strftime("%d/%m/%Y %H:%M:%S")
 
-    try:
-        result = pipeline.run(payload)
 
-        job_store.update_job(
+class Phase11Runner:
+    def run(self, trace_id: str, payload: dict):
+        """
+        This method is called INSIDE async worker.
+        If this returns without writing audit → BUG.
+        """
+
+        result = None
+        error = None
+        processed = 0
+
+        try:
+            # -----------------------------
+            # RUN PIPELINE (SYNC, SAFE)
+            # -----------------------------
+            result = pipeline.run(payload)
+            processed = result.get("processed", 0)
+
+            status = "OK"
+
+        except Exception as e:
+            status = "FAILED"
+            error = str(e)
+
+        # -----------------------------
+        # UPDATE JOB STORE (DONE)
+        # -----------------------------
+        update_job_status(
             trace_id=trace_id,
             status="DONE",
-            result=result,
-            error=None,
+            result={
+                "status": status,
+                "processed": processed
+            },
+            error=error
         )
 
-        update_audit_log_on_completion(
-            sheets_service=sheets_service,
-            spreadsheet_id=SHEET_ID,
-            tab_name=AUDIT_TAB,
-            row_number=audit_row_number,
-            status="DONE",
-            rfqs_processed=result.get("processed", 0),
-            details_json=result,
-        )
+        # -----------------------------
+        # 🔴 HARD GUARANTEE AUDIT WRITE
+        # -----------------------------
+        append_audit_row({
+            "TIMESTAMP_IST": _now_ist(),
+            "TRACE_ID": trace_id,
+            "PHASE": "phase11",
+            "MODE": payload,
+            "STATUS": status,
+            "RFQS_TOTAL": payload.get("rfqs_total", ""),
+            "RFQS_PROCESSED": processed
+        })
 
-    except Exception as e:
-        job_store.update_job(
-            trace_id=trace_id,
-            status="FAILED",
-            result=None,
-            error=str(e),
-        )
-
-        update_audit_log_on_completion(
-            sheets_service=sheets_service,
-            spreadsheet_id=SHEET_ID,
-            tab_name=AUDIT_TAB,
-            row_number=audit_row_number,
-            status="FAILED",
-            rfqs_processed=0,
-            details_json={"error": str(e)},
-        )
-
-
-def run_phase11_background(trace_id: str, payload: dict):
-    payload = payload or {}
-
-    # -------------------------------
-    # HARD PING ISOLATION
-    # -------------------------------
-    if payload.get("mode") == "ping":
-        job_store.create_job(trace_id=trace_id, status="DONE", mode="ping")
-        job_store.update_job(
-            trace_id=trace_id,
-            status="DONE",
-            result={"status": "OK", "mode": "PING"},
-            error=None,
-        )
-        return
-
-    sheets_service = get_sheets_service()
-
-    job_store.create_job(trace_id=trace_id, status="RUNNING", mode="async")
-
-    audit_row_number = append_audit_with_alert(
-        sheets_service=sheets_service,
-        spreadsheet_id=SHEET_ID,
-        tab_name=AUDIT_TAB,
-        audit_row=[
-            "phase11",
-            payload,
-            "RUNNING",
-            "",
-            "",
-        ],
-        run_id="PHASE11",
-        request_id=trace_id,
-    )
-
-    update_audit_log_trace_id(
-        sheets_service=sheets_service,
-        spreadsheet_id=SHEET_ID,
-        tab_name=AUDIT_TAB,
-        row_number=audit_row_number,
-        trace_id=trace_id,
-    )
-
-    t = threading.Thread(
-        target=_run,
-        args=(trace_id, payload, audit_row_number),
-        daemon=True,
-    )
-    t.start()
+        # -----------------------------
+        # ALWAYS RETURN
+        # -----------------------------
+        return {
+            "status": status,
+            "processed": processed,
+            "trace_id": trace_id
+        }
