@@ -1,5 +1,5 @@
 # ------------------------------------------------------------
-# MAIN SERVER — PHASE 11 + STATUS API (FINAL)
+# MAIN SERVER — PHASE 11 + STATUS API (FINAL, STABLE)
 # ------------------------------------------------------------
 
 from fastapi import FastAPI, HTTPException
@@ -18,6 +18,7 @@ app = FastAPI()
 
 class Phase11Request(BaseModel):
     mode: str = "production"
+    source: str | None = None
 
 
 # ------------------------------------------------------------
@@ -33,7 +34,14 @@ def run_phase11(payload: Phase11Request):
 
     trace_id = str(uuid.uuid4())
 
-    # Start background runner (handles ping internally)
+    # Register job BEFORE running
+    job_store.create_job(
+        trace_id=trace_id,
+        mode=payload.mode,
+        payload=payload.dict(),
+    )
+
+    # Fire background runner (non-blocking)
     run_phase11_background(
         trace_id=trace_id,
         payload=payload.dict(),
@@ -46,7 +54,7 @@ def run_phase11(payload: Phase11Request):
 
 
 # ------------------------------------------------------------
-# STATUS ENDPOINT (NEW — REQUIRED)
+# STATUS ENDPOINT
 # ------------------------------------------------------------
 
 @app.get("/status/{trace_id}")
@@ -57,7 +65,7 @@ def get_status(trace_id: str):
 
     job = job_store.get_job(trace_id)
 
-    if not job:
+    if job is None:
         raise HTTPException(
             status_code=404,
             detail="Trace ID not found"
@@ -67,7 +75,7 @@ def get_status(trace_id: str):
 
 
 # ------------------------------------------------------------
-# ROOT / HEALTH (OPTIONAL)
+# HEALTH CHECK
 # ------------------------------------------------------------
 
 @app.get("/")
