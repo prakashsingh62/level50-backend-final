@@ -1,35 +1,32 @@
 # ------------------------------------------------------------
-# PHASE 11 RUNNER — ABSOLUTE HARD-SAFE
-# NO AUDIT IMPORT
-# NO JOB STORE IMPORT
-# NO CRASH POSSIBLE
+# PHASE 11 RUNNER — FINAL HARD-SAFE
+# MATCHES main_server.py IMPORT
 # ------------------------------------------------------------
 
 from pipeline_engine import pipeline
 
 
-class Phase11Runner:
-    def run(self, trace_id: str, payload: dict):
-        processed = 0
-        status = "FAILED"
-        error = None
+def run_phase11_background(trace_id: str, payload: dict):
+    """
+    This function name MUST exist.
+    main_server.py imports this directly.
+    """
 
-        try:
-            result = pipeline.run(payload)
-            processed = result.get("processed", 0)
-            status = "OK"
+    processed = 0
+    status = "FAILED"
+    error = None
 
-        except Exception as e:
-            error = str(e)
+    try:
+        result = pipeline.run(payload)
+        processed = result.get("processed", 0)
+        status = "OK"
 
-        # 🔒 FINAL RESPONSE — NO EXTERNAL DEPENDENCIES
-        return {
-            "trace_id": trace_id,
-            "status": status,
-            "processed": processed,
-            "error": error
-        }
+    except Exception as e:
+        error = str(e)
 
-
-# REQUIRED EXPORT
-runner = Phase11Runner()
+    return {
+        "trace_id": trace_id,
+        "status": status,
+        "processed": processed,
+        "error": error
+    }
