@@ -1,32 +1,45 @@
-# ------------------------------------------------------------
-# PHASE 11 RUNNER — FINAL HARD-SAFE
-# MATCHES main_server.py IMPORT
-# ------------------------------------------------------------
+# core/phase11_runner.py
 
-from pipeline_engine import pipeline
+import uuid
+import threading
+from utils.job_store import create_job, update_job_status
 
-
-def run_phase11_background(trace_id: str, payload: dict):
-    """
-    This function name MUST exist.
-    main_server.py imports this directly.
-    """
-
-    processed = 0
-    status = "FAILED"
-    error = None
-
+def _run_phase11(trace_id: str, payload: dict):
     try:
-        result = pipeline.run(payload)
-        processed = result.get("processed", 0)
-        status = "OK"
+        # mark running
+        update_job_status(trace_id, status="RUNNING")
 
+        # >>> YOUR EXISTING PHASE-11 LOGIC HERE <<<
+        # do NOT change business logic
+        result = run_phase11_internal(payload)
+
+        update_job_status(
+            trace_id,
+            status="DONE",
+            result=result
+        )
     except Exception as e:
-        error = str(e)
+        update_job_status(
+            trace_id,
+            status="FAILED",
+            error=str(e)
+        )
 
-    return {
-        "trace_id": trace_id,
-        "status": status,
-        "processed": processed,
-        "error": error
-    }
+def run_phase11_background(payload: dict) -> str:
+    trace_id = str(uuid.uuid4())
+
+    create_job(
+        trace_id=trace_id,
+        status="QUEUED",
+        mode=payload.get("mode"),
+        source=payload.get("source")
+    )
+
+    t = threading.Thread(
+        target=_run_phase11,
+        args=(trace_id, payload),
+        daemon=True
+    )
+    t.start()
+
+    return trace_id
