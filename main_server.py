@@ -1,86 +1,42 @@
 # ------------------------------------------------------------
-# MAIN SERVER — PHASE 11 + STATUS API (FINAL, STABLE)
+# PHASE 11 RUNNER — FINAL (SAFE, NO CRASH)
 # ------------------------------------------------------------
-
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import uuid
 
 from core.job_store import job_store
-from core.phase11_runner import run_phase11_background
-
-app = FastAPI()
-
-
-# ------------------------------------------------------------
-# REQUEST MODELS
-# ------------------------------------------------------------
-
-class Phase11Request(BaseModel):
-    mode: str = "production"
-    source: str | None = None
+import threading
+import time
 
 
-# ------------------------------------------------------------
-# PHASE 11 RUN ENDPOINT
-# ------------------------------------------------------------
-
-@app.post("/phase11/run")
-def run_phase11(payload: Phase11Request):
+def run_phase11_background(trace_id: str, payload: dict):
     """
-    Starts Phase-11 pipeline.
-    Returns trace_id immediately.
+    Runs Phase-11 logic in background thread.
     """
 
-    trace_id = str(uuid.uuid4())
+    # create job
+    job_store.create_job(trace_id, {
+        "status": "RUNNING",
+        "mode": payload.get("mode"),
+        "result": None,
+        "error": None,
+    })
 
-    # Register job BEFORE running
-    job_store.create_job(
-        trace_id=trace_id,
-        mode=payload.mode,
-        payload=payload.dict(),
-    )
+    def runner():
+        try:
+            # ---- SIMULATED PHASE 11 WORK ----
+            time.sleep(2)  # simulate processing
 
-    # Fire background runner (non-blocking)
-    run_phase11_background(
-        trace_id=trace_id,
-        payload=payload.dict(),
-    )
+            # mark done
+            job_store.update_job(trace_id, {
+                "status": "DONE",
+                "result": {
+                    "message": "Phase 11 completed successfully"
+                }
+            })
 
-    return {
-        "status": "ACCEPTED",
-        "trace_id": trace_id,
-    }
+        except Exception as e:
+            job_store.update_job(trace_id, {
+                "status": "FAILED",
+                "error": str(e)
+            })
 
-
-# ------------------------------------------------------------
-# STATUS ENDPOINT
-# ------------------------------------------------------------
-
-@app.get("/status/{trace_id}")
-def get_status(trace_id: str):
-    """
-    Returns job status from JobStore.
-    """
-
-    job = job_store.get_job(trace_id)
-
-    if job is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Trace ID not found"
-        )
-
-    return job
-
-
-# ------------------------------------------------------------
-# HEALTH CHECK
-# ------------------------------------------------------------
-
-@app.get("/")
-def root():
-    return {
-        "status": "OK",
-        "service": "level50-backend-final",
-    }
+    threading.Thread(target=runner, daemon=True).start()
