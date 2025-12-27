@@ -1,24 +1,24 @@
 # ------------------------------------------------------------
 # PIPELINE ENGINE — LEVEL 70 / PHASE 11
-# FINAL, HANG-PROOF, PROD-SAFE
+# FINAL, AUDIT-ISOLATED, PROD-SAFE
 # ------------------------------------------------------------
 
 from sheet_reader import read_rfqs
 from classify import classify_rfq
 from sheet_writer import write_sheet
 
-
 class Level70Pipeline:
     def run(self, payload=None):
         payload = payload or {}
 
         # -------------------------------
-        # PING MODE
+        # PING MODE (NO SIDE EFFECTS)
         # -------------------------------
         if payload.get("mode") == "ping":
             return {
                 "status": "OK",
-                "mode": "PING"
+                "mode": "PING",
+                "message": "Pipeline reachable"
             }
 
         # -------------------------------
@@ -36,14 +36,15 @@ class Level70Pipeline:
         if not rfqs:
             return {
                 "status": "NO_OP",
-                "processed": 0
+                "processed": 0,
+                "reason": "No RFQs resolved"
             }
 
         if isinstance(rfqs, dict):
             rfqs = [rfqs]
 
         # -------------------------------
-        # PROCESS
+        # PROCESS RFQs (NO AUDIT HERE)
         # -------------------------------
         processed = 0
 
@@ -53,17 +54,16 @@ class Level70Pipeline:
                 write_sheet(rfq)
                 processed += 1
             except Exception:
-                # NEVER CRASH PIPELINE
+                # skip single RFQ failure
                 continue
 
         # -------------------------------
-        # FINAL
+        # FINAL RETURN
         # -------------------------------
         return {
             "status": "OK",
             "processed": processed
         }
-
 
 # REQUIRED SINGLETON
 pipeline = Level70Pipeline()
