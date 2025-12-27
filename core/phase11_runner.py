@@ -1,61 +1,62 @@
 # ------------------------------------------------------------
-# PHASE 11 RUNNER — FINAL, SAFE, NO MISSING IMPORTS
+# PHASE 11 RUNNER — FINAL SAFE VERSION
 # ------------------------------------------------------------
 
 from core.job_store import job_store
-from datetime import datetime
-import traceback
+import threading
+import time
 
 
 def run_phase11_background(trace_id: str, payload: dict):
     """
-    Executes Phase-11 pipeline safely.
-    Updates job status in JobStore.
-    NEVER raises to FastAPI.
+    Entry point for Phase-11 background execution.
+    Handles PING safely.
+    """
+
+    mode = payload.get("mode", "production")
+
+    # ----------------------------
+    # PING MODE — HARD EXIT
+    # ----------------------------
+    if mode == "ping":
+        job_store.create_job(
+            trace_id=trace_id,
+            status="DONE",
+            mode="ping",
+            result={"status": "OK", "message": "Ping successful"},
+        )
+        return
+
+    # ----------------------------
+    # PRODUCTION MODE — ASYNC
+    # ----------------------------
+    job_store.create_job(
+        trace_id=trace_id,
+        status="RUNNING",
+        mode="production",
+    )
+
+    thread = threading.Thread(
+        target=_run_phase11_pipeline,
+        args=(trace_id,),
+        daemon=True,
+    )
+    thread.start()
+
+
+def _run_phase11_pipeline(trace_id: str):
+    """
+    Actual Phase-11 pipeline logic (simplified safe stub).
     """
 
     try:
-        # Mark job as RUNNING
-        job_store.update_job(
-            trace_id=trace_id,
-            status="RUNNING",
-            updated_at=datetime.utcnow().isoformat()
-        )
-
-        mode = payload.get("mode", "production")
-
-        # ----------------------------------------------------
-        # TEST / PING MODE (NO SHEET WRITE)
-        # ----------------------------------------------------
-        if mode.lower() in ("test", "ping"):
-            job_store.update_job(
-                trace_id=trace_id,
-                status="DONE",
-                result={
-                    "status": "SKIPPED",
-                    "reason": "TEST_MODE",
-                    "mode": mode
-                },
-                updated_at=datetime.utcnow().isoformat()
-            )
-            return
-
-        # ----------------------------------------------------
-        # PRODUCTION LOGIC (PLACEHOLDER — YOUR REAL PIPELINE)
-        # ----------------------------------------------------
-        # 🔴 IMPORTANT:
-        # Put your REAL Phase-11 processing here
-        processed_count = 1649  # example from your logs
+        # 🔴 PLACEHOLDER: real pipeline yahan aayega
+        time.sleep(2)
 
         job_store.update_job(
             trace_id=trace_id,
             status="DONE",
-            result={
-                "status": "OK",
-                "processed": processed_count,
-                "mode": "PRODUCTION"
-            },
-            updated_at=datetime.utcnow().isoformat()
+            result={"status": "OK"},
         )
 
     except Exception as e:
@@ -63,6 +64,4 @@ def run_phase11_background(trace_id: str, payload: dict):
             trace_id=trace_id,
             status="FAILED",
             error=str(e),
-            traceback=traceback.format_exc(),
-            updated_at=datetime.utcnow().isoformat()
         )
