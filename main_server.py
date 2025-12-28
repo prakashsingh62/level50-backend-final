@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 import uuid
 
 from core.job_store import job_store
-from phase11_runner import run_phase11_background
+from core.phase11_runner import run_phase11_background
 
 app = FastAPI()
 
