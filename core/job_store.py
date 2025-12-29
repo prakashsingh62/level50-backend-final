@@ -1,32 +1,26 @@
+import sys
 import os
 
+# Path fix taaki 'core' folder mil jaye
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 class JobStore:
-    def create_job(self, *args, **kwargs):
-        return True
-
+    def create_job(self, *args, **kwargs): return True
     def update_job(self, *args, **kwargs):
-        # Yahan humne absolute import use kiya hai taaki ModuleNotFoundError na aaye
         try:
+            # Direct import from the current folder
+            import google_sheets
             from google_sheets import sheet_manager
-        except ImportError:
-            try:
-                from core.google_sheets import sheet_manager
-            except:
-                return False
-        
-        trace_id = kwargs.get('job_id') or kwargs.get('trace_id')
-        status = kwargs.get('status', 'UNKNOWN')
-        result = kwargs.get('result', {})
-
-        if trace_id:
-            try:
+            
+            t_id = kwargs.get('job_id') or kwargs.get('trace_id')
+            if t_id:
                 sheet_manager.append_audit_log(
-                    trace_id=trace_id,
-                    status=status,
-                    details=str(result)
+                    trace_id=t_id,
+                    status=kwargs.get('status', 'UPDATE'),
+                    details=str(kwargs.get('result', {}))
                 )
-            except:
-                pass
+        except Exception as e:
+            print(f"Audit Error: {e}")
         return True
 
 job_store = JobStore()
