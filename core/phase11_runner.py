@@ -1,15 +1,36 @@
-from core.job_store import job_store
 import threading
 import time
+import os
+import sys
+
+# Path fix to find google_sheets.py
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def run_phase11_background(trace_id: str, payload: dict):
-    # Seedha STARTING entry trigger karo
-    job_store.update_job(trace_id=trace_id, status="STARTING", result={"mode": "production"})
-    
-    thread = threading.Thread(target=_run_phase11_pipeline, args=(trace_id,), daemon=True)
+    # DIRECT WRITE TO SHEET
+    def force_audit():
+        try:
+            from google_sheets import sheet_manager
+            sheet_manager.append_audit_log(
+                trace_id=trace_id,
+                status="RUNNING",
+                details=f"Postman Triggered - Mode: {payload.get('mode')}"
+            )
+        except Exception as e:
+            print(f"Audit failed: {e}")
+
+    # Start background work
+    thread = threading.Thread(target=force_audit, daemon=True)
     thread.start()
 
-def _run_phase11_pipeline(trace_id: str):
-    time.sleep(2)
-    # Final SUCCESS entry
-    job_store.update_job(trace_id=trace_id, status="SUCCESS", result={"msg": "Done"})
+    # Simulation pipeline
+    thread2 = threading.Thread(target=_run_pipeline, args=(trace_id,), daemon=True)
+    thread2.start()
+
+def _run_pipeline(trace_id: str):
+    time.sleep(5)
+    try:
+        from google_sheets import sheet_manager
+        sheet_manager.append_audit_log(trace_id=trace_id, status="SUCCESS", details="Task Completed")
+    except:
+        pass
