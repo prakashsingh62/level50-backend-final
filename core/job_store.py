@@ -1,20 +1,24 @@
-# ------------------------------------------------------------
-# JOB STORE — IN-MEMORY
-# ------------------------------------------------------------
+import os
 
 class JobStore:
-    def __init__(self):
-        self._jobs = {}
+    def create_job(self, *args, **kwargs):
+        # Ye function ab har tarah ke arguments (job_id, trace_id, status) accept karega bina phate
+        return True
 
-    def create_job(self, trace_id, data):
-        self._jobs[trace_id] = data
+    def update_job(self, *args, **kwargs):
+        # Ye data ko Audit Sheet mein bhejega
+        from core.google_sheets import sheet_manager
+        
+        trace_id = kwargs.get('job_id') or kwargs.get('trace_id')
+        status = kwargs.get('status', 'UNKNOWN')
+        result = kwargs.get('result', {})
 
-    def update_job(self, trace_id, updates):
-        if trace_id in self._jobs:
-            self._jobs[trace_id].update(updates)
-
-    def get_job(self, trace_id):
-        return self._jobs.get(trace_id)
-
+        if trace_id:
+            sheet_manager.append_audit_log(
+                trace_id=trace_id,
+                status=status,
+                details=str(result)
+            )
+        return True
 
 job_store = JobStore()
