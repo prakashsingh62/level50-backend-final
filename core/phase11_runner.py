@@ -1,6 +1,6 @@
 import threading, time, os, json, re, gspread, smtplib
 from email.mime.text import MIMEText
-from google import genai # Latest 2025 SDK
+from google import genai # Latest 2025 SDK import
 from google.oauth2.service_account import Credentials
 
 def get_audit_client():
@@ -31,14 +31,14 @@ def send_approval_notification(rfq, draft_content):
 
 def _execute_full_governance(trace_id: str, payload: dict):
     try:
-        # Initializing the Latest 2025 Client
+        # Initializing the Latest Client with your API Key
         client_ai = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
         
         email_content = payload.get("payload_details", {}).get("message", "New Inquiry")
         rfq_match = re.search(r'RFQ-?\d+', email_content, re.IGNORECASE)
         rfq = rfq_match.group(0).upper() if rfq_match else "RFQ-AUTO"
         
-        # Latest AI Generation Method (Gemini 2.0 / 1.5 Flash Support)
+        # New Generation Method (Latest SDK)
         response = client_ai.models.generate_content(
             model='gemini-1.5-flash', 
             contents=f"Write a 2-line professional business reply for: {email_content}"
@@ -47,9 +47,10 @@ def _execute_full_governance(trace_id: str, payload: dict):
 
         client_sheet, sheet_id = get_audit_client()
         if client_sheet:
+            # Column I (Draft), J (Approval), K (Status)
             row = [time.strftime("%Y-%m-%d %H:%M:%S"), trace_id, rfq, "UID-80", "DOMESTIC", "MAIN", "STATUS", "NEW", draft, "PENDING", "WAITING"]
             client_sheet.open_by_key(sheet_id).worksheet("LEVEL_80_CELL_AUDIT").append_row(row)
-            print(f"--- LATEST AI DRAFT SAVED ---")
+            print(f"--- LATEST AI DRAFT SAVED FOR {rfq} ---")
         
         send_approval_notification(rfq, draft)
     except Exception as e:
