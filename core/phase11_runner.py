@@ -3,7 +3,7 @@ from email.mime.text import MIMEText
 import google.generativeai as genai
 from google.oauth2.service_account import Credentials
 
-# 1. API Configuration
+# 1. Base Configuration
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
 def get_audit_client():
@@ -17,7 +17,7 @@ def get_audit_client():
 def send_approval_notification(rfq, draft_content):
     owner = os.environ.get("OWNER_EMAIL")
     password = os.environ.get("TEMP_APP_PASSWORD")
-    msg = MIMEText(f"Bhai, {rfq} ke liye AI Draft taiyar hai:\n\n{draft_content}\n\nApproval ke liye Sheet mein YES likho.")
+    msg = MIMEText(f"Bhai, {rfq} ke liye AI Draft taiyar hai:\n\n{draft_content}\n\nApprove karne ke liye Sheet mein YES likho.")
     msg['Subject'] = f"🚀 APPROVAL NEEDED: {rfq}"
     msg['From'] = owner
     msg['To'] = owner
@@ -30,23 +30,23 @@ def send_approval_notification(rfq, draft_content):
 
 def _execute_full_governance(trace_id: str, payload: dict):
     try:
-        # 2. Stable Model Initialization inside function
-        # Using 'gemini-pro' as it's the most globally stable identifier
-        model = genai.GenerativeModel('gemini-pro')
+        # THE FIX: Using the exact string that Google expects in the legacy SDK
+        model = genai.GenerativeModel('gemini-1.5-flash-001') 
         
         email_content = payload.get("payload_details", {}).get("message", "")
         rfq_match = re.search(r'RFQ-?\d+', email_content, re.IGNORECASE)
         rfq = rfq_match.group(0).upper() if rfq_match else "RFQ-NEW"
         
         prompt = f"Create professional reply for {rfq} from: {email_content}. Return ONLY JSON: {{\"draft\": \"...\"}}"
-        res = model.generate_content(prompt) # Removed complex config for stability
+        res = model.generate_content(prompt)
         
-        # Safe JSON parsing
-        try:
-            json_text = res.text.replace('```json', '').replace('```', '').strip()
-            draft = json.loads(json_text).get("draft", "Draft Error")
-        except:
-            draft = res.text # Fallback if not JSON
+        # Safe draft extraction
+        draft = res.text
+        if "{" in draft:
+            try:
+                json_text = draft.replace('```json', '').replace('```', '').strip()
+                draft = json.loads(json_text).get("draft", draft)
+            except: pass
 
         client, sheet_id = get_audit_client()
         if client:
@@ -55,7 +55,7 @@ def _execute_full_governance(trace_id: str, payload: dict):
         
         send_approval_notification(rfq, draft)
     except Exception as e:
-        print(f"Final Fix Error: {e}")
+        print(f"ULTIMATE_FIX_ERROR: {e}")
 
 def run_phase11_background(trace_id: str, payload: dict):
     threading.Thread(target=_execute_full_governance, args=(trace_id, payload), daemon=True).start()
