@@ -1,6 +1,5 @@
 import threading, time, os, json, re, gspread, smtplib
 from email.mime.text import MIMEText
-from google import genai # Latest 2025 SDK import
 from google.oauth2.service_account import Credentials
 
 def get_audit_client():
@@ -14,47 +13,48 @@ def get_audit_client():
 def send_approval_notification(rfq, draft_content):
     sender = os.environ.get("OWNER_EMAIL")
     password = os.environ.get("TEMP_APP_PASSWORD")
-    timestamp = time.strftime("%H:%M:%S")
-    
-    msg = MIMEText(f"Bhai, {rfq} ke liye AI Draft taiyar hai:\n\n{draft_content}\n\nSheet check karo.")
-    msg['Subject'] = f"🚀 LATEST AI APPROVAL: {rfq} | {timestamp}"
+    msg = MIMEText(f"Bhai, {rfq} Draft Ready:\n\n{draft_content}")
+    msg['Subject'] = f"🚀 ACTION REQUIRED: {rfq} | {int(time.time())}"
     msg['From'] = sender
     msg['To'] = sender
-    
     try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-            server.login(sender, password)
-            server.send_message(msg)
-            print("--- MAIL SENT SUCCESSFULLY ---")
-            return True
-    except: return False
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
+            s.login(sender, password)
+            s.send_message(msg)
+            print("--- MAIL SENT ---")
+    except: print("--- MAIL FAILED ---")
 
 def _execute_full_governance(trace_id: str, payload: dict):
+    draft = "Review required for inquiry." # Default fallback
     try:
-        # Initializing the Latest Client with your API Key
-        client_ai = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-        
         email_content = payload.get("payload_details", {}).get("message", "New Inquiry")
-        rfq_match = re.search(r'RFQ-?\d+', email_content, re.IGNORECASE)
-        rfq = rfq_match.group(0).upper() if rfq_match else "RFQ-AUTO"
+        rfq = "RFQ-555"
         
-        # New Generation Method (Latest SDK)
-        response = client_ai.models.generate_content(
-            model='gemini-1.5-flash', 
-            contents=f"Write a 2-line professional business reply for: {email_content}"
-        )
-        draft = response.text.strip()
+        # 🛡️ DYNAMIC AI CONNECTION (Try New SDK First, then Fallback)
+        try:
+            from google import genai
+            client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+            # Note: No 'models/' prefix here for the new SDK
+            response = client.models.generate_content(model='gemini-1.5-flash', contents=email_content)
+            draft = response.text.strip()
+        except Exception as e1:
+            print(f"New SDK Failed: {e1}. Trying Legacy...")
+            import google.generativeai as legacy_genai
+            legacy_genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+            model = legacy_genai.GenerativeModel('gemini-pro') # gemini-pro is most stable legacy name
+            response = model.generate_content(email_content)
+            draft = response.text.strip()
 
+        # Update Sheet
         client_sheet, sheet_id = get_audit_client()
         if client_sheet:
-            # Column I (Draft), J (Approval), K (Status)
             row = [time.strftime("%Y-%m-%d %H:%M:%S"), trace_id, rfq, "UID-80", "DOMESTIC", "MAIN", "STATUS", "NEW", draft, "PENDING", "WAITING"]
             client_sheet.open_by_key(sheet_id).worksheet("LEVEL_80_CELL_AUDIT").append_row(row)
-            print(f"--- LATEST AI DRAFT SAVED FOR {rfq} ---")
+            print("--- SHEET UPDATED ---")
         
         send_approval_notification(rfq, draft)
     except Exception as e:
-        print(f"--- CRITICAL SYSTEM ERROR: {e} ---")
+        print(f"SYSTEM CRASHED: {e}")
 
 def run_phase11_background(trace_id: str, payload: dict):
     threading.Thread(target=_execute_full_governance, args=(trace_id, payload), daemon=True).start()
