@@ -13,7 +13,7 @@ def get_audit_client():
     except: return None, None
 
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-1.5-flash-latest')
+model_name='models/gemini-1.5-flash'
 
 # --- MAIL SENDER LOGIC ---
 def send_approval_notification(rfq, draft_content):
