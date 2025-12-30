@@ -1,8 +1,9 @@
-import threading, time, os, json, re, gspread
+import threading, time, os, json, re, gspread, smtplib
+from email.mime.text import MIMEText
 import google.generativeai as genai
 from google.oauth2.service_account import Credentials
 
-# --- 1. SETUP & AUTH ---
+# --- AUTH & SETUP ---
 def get_audit_client():
     try:
         creds_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
@@ -14,53 +15,47 @@ def get_audit_client():
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# --- 2. AI DRAFTING ENGINE (Phase 19) ---
-def generate_draft_with_ai(email_text, rfq_no):
-    prompt = f"""
-    Create a professional short reply for RFQ: {rfq_no}.
-    Context: {email_text}
-    Return ONLY JSON: {{"draft": "Dear Customer, Thank you for {rfq_no}. We are reviewing it.", "intent": "ACKNOWLEDGE"}}
-    """
+# --- MAIL SENDER LOGIC ---
+def send_approval_notification(rfq, draft_content):
+    owner = os.environ.get("OWNER_EMAIL")
+    password = os.environ.get("TEMP_APP_PASSWORD")
+    
+    msg = MIMEText(f"Bhai, {rfq} ke liye AI Draft taiyar hai:\n\n{draft_content}\n\nApprove karne ke liye Sheet mein YES likho.")
+    msg['Subject'] = f"🚀 APPROVAL NEEDED: {rfq}"
+    msg['From'] = owner
+    msg['To'] = owner
+    
     try:
-        response = model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
-        return json.loads(response.text)
-    except:
-        return {"draft": f"Dear Customer, we have received your request for {rfq_no}. Our team is working on it.", "intent": "AUTO_ACK"}
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(owner, password)
+            server.send_message(msg)
+            return True
+    except: return False
 
-# --- 3. EXECUTION LOGIC ---
+# --- CORE EXECUTION ---
 def _execute_full_governance(trace_id: str, payload: dict):
     try:
         email_content = payload.get("payload_details", {}).get("message", "")
         
-        # RFQ Extraction (Bulletproof Logic)
+        # 1. AI Extract & Draft
         rfq_match = re.search(r'RFQ-?\d+', email_content, re.IGNORECASE)
-        rfq = rfq_match.group(0).upper() if rfq_match else "RFQ-PENDING"
+        rfq = rfq_match.group(0).upper() if rfq_match else "RFQ-NEW"
         
-        # AI Draft Creation
-        ai_data = generate_draft_with_ai(email_content, rfq)
-        
-        # Log to CELL_AUDIT with Approval Column
-        # Columns: Timestamp, TraceID, RFQ, UID, Registry, Tracker, StatusName, OldVal, NewVal, APPROVAL, MAIL_STATUS
-        row_data = [
-            time.strftime("%Y-%m-%d %H:%M:%S"), trace_id, rfq, "UID-80-AUTO",
-            "DOMESTIC_REGISTRY", "MAIN_TRACKER", "STATUS", "NEW", 
-            ai_data['draft'], "PENDING", "WAITING"
-        ]
-        
+        prompt = f"Create professional reply for {rfq} from: {email_content}. Return ONLY JSON: {{\"draft\": \"...\"}}"
+        res = model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
+        draft = json.loads(res.text).get("draft", "Draft Error")
+
+        # 2. Update Sheet
         client, sheet_id = get_audit_client()
         if client:
-            client.open_by_key(sheet_id).worksheet("LEVEL_80_CELL_AUDIT").append_row(row_data)
-            
-        # Final Audit Log
-        log_to_sheet("LEVEL_80_AUDIT_LOG", [time.strftime("%Y-%m-%d %H:%M:%S"), trace_id, "phase19_Draft", f"Draft Ready for {rfq}", "SUCCESS"])
-    except Exception as e:
-        print(f"Phase 19 Error: {e}")
+            row = [time.strftime("%Y-%m-%d %H:%M:%S"), trace_id, rfq, "UID-80", "DOMESTIC", "MAIN", "STATUS", "NEW", draft, "PENDING", "WAITING"]
+            client.open_by_key(sheet_id).worksheet("LEVEL_80_CELL_AUDIT").append_row(row)
 
-def log_to_sheet(tab_name, row_data):
-    try:
-        client, sheet_id = get_audit_client()
-        if client: client.open_by_key(sheet_id).worksheet(tab_name).append_row(row_data)
-    except: pass
+        # 3. Send Mobile Notification
+        send_approval_notification(rfq, draft)
+        
+    except Exception as e:
+        print(f"Trigger Error: {e}")
 
 def run_phase11_background(trace_id: str, payload: dict):
     threading.Thread(target=_execute_full_governance, args=(trace_id, payload), daemon=True).start()
