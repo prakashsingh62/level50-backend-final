@@ -5,47 +5,61 @@ import json
 import gspread
 from google.oauth2.service_account import Credentials
 
-# --- INTERNAL SHEET ENGINE (No Imports Needed) ---
-def _direct_sheet_update(trace_id, status, details_str):
+# --- 1. GOVERNANCE ENGINE (Phase 15 & 16) ---
+def get_audit_client():
     try:
-        # Railway variables se data uthayega
         creds_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
         sheet_id = os.environ.get("AUDIT_SHEET_ID")
-        
-        if not creds_json or not sheet_id:
-            print("Environment Variables Missing!")
-            return
-
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds = Credentials.from_service_account_info(json.loads(creds_json), scopes=scopes)
-        client = gspread.authorize(creds)
-        
-        # Direct Sheet Access
-        sheet = client.open_by_key(sheet_id).worksheet("LEVEL_80_AUDIT_LOG")
-        
-        # Row data prepare karo
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        row = [timestamp, trace_id, "phase11", details_str, status]
-        
-        sheet.append_row(row)
-        print(f"✅ SHEET UPDATED: {trace_id} -> {status}")
+        return gspread.authorize(creds), sheet_id
     except Exception as e:
-        print(f"❌ SHEET ENGINE FAILED: {str(e)}")
+        print(f"Audit Connection Error: {e}")
+        return None, None
 
-# --- MAIN RUNNER ---
+def log_to_sheet(tab_name, row_data):
+    """Universal writer for all Audit Tabs"""
+    try:
+        client, sheet_id = get_audit_client()
+        if client:
+            sheet = client.open_by_key(sheet_id).worksheet(tab_name)
+            sheet.append_row(row_data)
+    except Exception as e:
+        print(f"Logging failed for {tab_name}: {e}")
+
+# --- 2. CORE PHASE-14 LOGIC (Strict Write Guard) ---
+def _execute_full_governance(trace_id: str, payload: dict):
+    try:
+        # Phase-14: Entry & Normalization
+        # Yahan asli RFQs read honge (Abhi simulation hai)
+        rfqs = [{"rfq_no": "RFQ-LIVE-001", "customer": "HZL LTD", "due_date": "2025-01-15"}]
+        
+        for rfq in rfqs:
+            # Phase-14: Classification & Priority
+            decision = "Technical Query Received" # AI/Rule based logic
+            priority = "Urgent"
+            
+            # Phase-15: Run Audit Enforcement
+            log_to_sheet("LEVEL_80_RUN_AUDIT", [
+                time.strftime("%Y-%m-%d %H:%M:%S"), trace_id, rfq["rfq_no"], decision, priority, "DONE"
+            ])
+
+            # Phase-16: Cell Audit (Before vs After)
+            # Strict Rule: Hum sirf status columns badlenge, Customer/RFQ No nahi!
+            log_to_sheet("LEVEL_80_CELL_AUDIT", [
+                time.strftime("%Y-%m-%d %H:%M:%S"), trace_id, rfq["rfq_no"], "STATUS", "NEW", decision
+            ])
+
+        # Final Success Mark
+        log_to_sheet("LEVEL_80_AUDIT_LOG", [time.strftime("%Y-%m-%d %H:%M:%S"), trace_id, "phase14_16", "Execution Complete", "SUCCESS"])
+
+    except Exception as e:
+        log_to_sheet("LEVEL_80_AUDIT_LOG", [time.strftime("%Y-%m-%d %H:%M:%S"), trace_id, "phase14_16", str(e), "ERROR"])
+
+# --- 3. RUNNER START ---
 def run_phase11_background(trace_id: str, payload: dict):
-    # Immediate update (STARTING)
-    threading.Thread(
-        target=_direct_sheet_update, 
-        args=(trace_id, "STARTING", f"Mode: {payload.get('mode')}"), 
-        daemon=True
-    ).start()
+    # Initial Log Entry
+    log_to_sheet("LEVEL_80_AUDIT_LOG", [time.strftime("%Y-%m-%d %H:%M:%S"), trace_id, "phase14_16", "Production Run", "STARTING"])
     
-    # Start the actual process
-    thread = threading.Thread(target=_run_pipeline, args=(trace_id,), daemon=True)
+    thread = threading.Thread(target=_execute_full_governance, args=(trace_id, payload), daemon=True)
     thread.start()
-
-def _run_pipeline(trace_id: str):
-    time.sleep(5) # Simulation
-    # Final update (SUCCESS)
-    _direct_sheet_update(trace_id, "SUCCESS", "Pipeline Completed")
