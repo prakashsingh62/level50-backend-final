@@ -3,10 +3,8 @@ from email.mime.text import MIMEText
 import google.generativeai as genai
 from google.oauth2.service_account import Credentials
 
-# 1. AI Model Setup (Define this FIRST)
+# 1. API Configuration
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-# Using the most stable direct path naming
-model_instance = genai.GenerativeModel('gemini-1.5-flash')
 
 def get_audit_client():
     try:
@@ -32,14 +30,23 @@ def send_approval_notification(rfq, draft_content):
 
 def _execute_full_governance(trace_id: str, payload: dict):
     try:
+        # 2. Stable Model Initialization inside function
+        # Using 'gemini-pro' as it's the most globally stable identifier
+        model = genai.GenerativeModel('gemini-pro')
+        
         email_content = payload.get("payload_details", {}).get("message", "")
         rfq_match = re.search(r'RFQ-?\d+', email_content, re.IGNORECASE)
         rfq = rfq_match.group(0).upper() if rfq_match else "RFQ-NEW"
         
-        # Using model_instance here to avoid name conflict
         prompt = f"Create professional reply for {rfq} from: {email_content}. Return ONLY JSON: {{\"draft\": \"...\"}}"
-        res = model_instance.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
-        draft = json.loads(res.text).get("draft", "Draft Error")
+        res = model.generate_content(prompt) # Removed complex config for stability
+        
+        # Safe JSON parsing
+        try:
+            json_text = res.text.replace('```json', '').replace('```', '').strip()
+            draft = json.loads(json_text).get("draft", "Draft Error")
+        except:
+            draft = res.text # Fallback if not JSON
 
         client, sheet_id = get_audit_client()
         if client:
@@ -48,7 +55,7 @@ def _execute_full_governance(trace_id: str, payload: dict):
         
         send_approval_notification(rfq, draft)
     except Exception as e:
-        print(f"Final Trigger Error: {e}")
+        print(f"Final Fix Error: {e}")
 
 def run_phase11_background(trace_id: str, payload: dict):
     threading.Thread(target=_execute_full_governance, args=(trace_id, payload), daemon=True).start()
