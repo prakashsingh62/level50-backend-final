@@ -1,10 +1,7 @@
 import threading, time, os, json, re, gspread, smtplib
 from email.mime.text import MIMEText
-import google.generativeai as genai
+from google import genai # Latest 2025 SDK
 from google.oauth2.service_account import Credentials
-
-# 1. API Configuration - Fixed Model ID
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
 def get_audit_client():
     try:
@@ -17,50 +14,46 @@ def get_audit_client():
 def send_approval_notification(rfq, draft_content):
     sender = os.environ.get("OWNER_EMAIL")
     password = os.environ.get("TEMP_APP_PASSWORD")
-    
-    # TIMESTAMP added to subject to force Gmail to show it as a NEW notification
     timestamp = time.strftime("%H:%M:%S")
-    subject = f"🚨 APPROVAL REQ: {rfq} | Time: {timestamp}"
     
-    body = f"Bhai, {rfq} ka draft ready hai.\n\nAI DRAFT:\n{draft_content}\n\nSheet mein YES likho approval ke liye."
-    msg = MIMEText(body)
-    msg['Subject'] = subject
-    msg['From'] = f"Level-80 AI <{sender}>"
+    msg = MIMEText(f"Bhai, {rfq} ke liye AI Draft taiyar hai:\n\n{draft_content}\n\nSheet check karo.")
+    msg['Subject'] = f"🚀 LATEST AI APPROVAL: {rfq} | {timestamp}"
+    msg['From'] = sender
     msg['To'] = sender
     
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(sender, password)
             server.send_message(msg)
-            print(f"--- MAIL SENT SUCCESSFULLY TO {sender} ---")
+            print("--- MAIL SENT SUCCESSFULLY ---")
             return True
-    except Exception as e:
-        print(f"--- MAIL FAILED: {e} ---")
-        return False
+    except: return False
 
 def _execute_full_governance(trace_id: str, payload: dict):
     try:
-        # THE FIX: Using the exact stable name without 'models/' prefix
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Initializing the Latest 2025 Client
+        client_ai = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
         
-        email_content = payload.get("payload_details", {}).get("message", "No content")
+        email_content = payload.get("payload_details", {}).get("message", "New Inquiry")
         rfq_match = re.search(r'RFQ-?\d+', email_content, re.IGNORECASE)
         rfq = rfq_match.group(0).upper() if rfq_match else "RFQ-AUTO"
         
-        # AI Logic
-        res = model.generate_content(f"Generate a professional 2-sentence reply for: {email_content}")
-        draft = res.text.strip()
+        # Latest AI Generation Method (Gemini 2.0 / 1.5 Flash Support)
+        response = client_ai.models.generate_content(
+            model='gemini-1.5-flash', 
+            contents=f"Write a 2-line professional business reply for: {email_content}"
+        )
+        draft = response.text.strip()
 
-        client, sheet_id = get_audit_client()
-        if client:
-            # Writing to Column I (Draft), Column J (Approval), Column K (Status)
+        client_sheet, sheet_id = get_audit_client()
+        if client_sheet:
             row = [time.strftime("%Y-%m-%d %H:%M:%S"), trace_id, rfq, "UID-80", "DOMESTIC", "MAIN", "STATUS", "NEW", draft, "PENDING", "WAITING"]
-            client.open_by_key(sheet_id).worksheet("LEVEL_80_CELL_AUDIT").append_row(row)
-            print(f"--- SHEET UPDATED FOR {rfq} ---")
+            client_sheet.open_by_key(sheet_id).worksheet("LEVEL_80_CELL_AUDIT").append_row(row)
+            print(f"--- LATEST AI DRAFT SAVED ---")
         
         send_approval_notification(rfq, draft)
     except Exception as e:
-        print(f"--- SYSTEM ERROR: {e} ---")
+        print(f"--- CRITICAL SYSTEM ERROR: {e} ---")
 
 def run_phase11_background(trace_id: str, payload: dict):
     threading.Thread(target=_execute_full_governance, args=(trace_id, payload), daemon=True).start()
