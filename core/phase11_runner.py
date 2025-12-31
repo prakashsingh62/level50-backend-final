@@ -13,16 +13,29 @@ def get_audit_client():
 def send_approval_notification(rfq, draft_content):
     sender = os.environ.get("OWNER_EMAIL")
     password = os.environ.get("TEMP_APP_PASSWORD")
+    
+    # Validation
+    if not sender or not password:
+        print("--- MAIL ERROR: Credentials missing in Railway Variables ---")
+        return False
+
     msg = MIMEText(f"Bhai, {rfq} Draft Ready:\n\n{draft_content}\n\nSheet check karo.")
     msg['Subject'] = f"🚀 SYSTEM ALERT: {rfq} | {int(time.time())}"
-    msg['From'] = sender
-    msg['To'] = sender
+    msg['From'] = f"Level-80 System <{sender}>"
+    msg['To'] = sender # Sending to yourself
+    
     try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
-            s.login(sender, password)
-            s.send_message(msg)
-            print("--- MAIL SENT SUCCESSFULLY ---")
-    except: print("--- MAIL FAILED ---")
+        # Standard Gmail SMTP (Port 587 with STARTTLS is more stable than 465)
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender, password)
+        server.send_message(msg)
+        server.quit()
+        print(f"--- SUCCESS: MAIL SENT TO {sender} ---")
+        return True
+    except Exception as e:
+        print(f"--- SMTP ERROR: {str(e)} ---")
+        return False
 
 def _execute_full_governance(trace_id: str, payload: dict):
     try:
@@ -30,18 +43,21 @@ def _execute_full_governance(trace_id: str, payload: dict):
         rfq_match = re.search(r'RFQ-?\d+', email_content, re.IGNORECASE)
         rfq = rfq_match.group(0).upper() if rfq_match else "RFQ-AUTO"
         
-        # SMART PLACEHOLDER (No AI Library needed, No 404 Error)
-        draft = f"SYSTEM GENERATED: Received inquiry for {rfq}. Content: {email_content[:50]}..."
+        # Row data preparation
+        draft = f"SYSTEM DRAFT: Inquiry received for {rfq}. Manual review pending."
 
+        # 1. Update Sheet (Jo ab chal raha hai)
         client_sheet, sheet_id = get_audit_client()
         if client_sheet:
             row = [time.strftime("%Y-%m-%d %H:%M:%S"), trace_id, rfq, "UID-80", "DOMESTIC", "MAIN", "STATUS", "NEW", draft, "PENDING", "WAITING"]
             client_sheet.open_by_key(sheet_id).worksheet("LEVEL_80_CELL_AUDIT").append_row(row)
-            print(f"--- SUCCESS: SHEET UPDATED FOR {rfq} ---")
+            print(f"--- SHEET UPDATED: {rfq} ---")
         
+        # 2. Trigger Mail (Iska error check karna hai)
         send_approval_notification(rfq, draft)
+        
     except Exception as e:
-        print(f"--- SYSTEM ERROR: {e} ---")
+        print(f"--- RUNNER CRASH: {e} ---")
 
 def run_phase11_background(trace_id: str, payload: dict):
     threading.Thread(target=_execute_full_governance, args=(trace_id, payload), daemon=True).start()
