@@ -21,7 +21,7 @@ def send_approval_notification(rfq, draft_content):
     msg['To'] = sender 
 
     try:
-        # Using Port 465 (SSL) as it's often more reliable for Gmail
+        # Port 465 (SSL) is generally more stable on Railway for Gmail
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(sender, password)
             server.send_message(msg)
@@ -41,7 +41,7 @@ def _execute_full_governance(trace_id: str, payload: dict):
         client_ai = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
         response = client_ai.models.generate_content(
             model='gemini-1.5-flash', 
-            contents=f"Write a professional 2-sentence reply for: {email_content}"
+            contents=f"Write a professional 2-sentence business reply for: {email_content}"
         )
         draft = response.text.strip()
 
