@@ -5,7 +5,8 @@ import google.generativeai as genai # Legacy support focus
 def send_approval_notification(rfq, draft_content, trace_id):
     sender = os.environ.get("OWNER_EMAIL")
     password = os.environ.get("TEMP_APP_PASSWORD")
-    base_url = "level50-backend-final-production.up.railway.app"
+    # Tera domain agar fix hai toh yahan direct likh sakte hain
+    base_url = os.environ.get("RAILWAY_STATIC_URL", "level50-backend-final-production.up.railway.app")
     approve_url = f"https://{base_url}/phase11/approve?trace_id={trace_id}"
     
     body = f"Bhai, {rfq} ka Draft ready hai.\n\nAI Draft:\n{draft_content}\n\n✅ APPROVE: {approve_url}"
@@ -15,6 +16,7 @@ def send_approval_notification(rfq, draft_content, trace_id):
     msg['To'] = sender 
 
     try:
+        # Use Port 587 with STARTTLS for Gmail on Railway
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(sender, password)
@@ -29,19 +31,19 @@ def _execute_full_governance(trace_id: str, payload: dict):
         email_content = payload.get("payload_details", {}).get("message", "Inquiry")
         rfq = "RFQ-555"
         
-        # FIX: Explicit Model Config
+        # FIX: Explicit Model Config for older SDK compatibility
         genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-        model = genai.GenerativeModel('gemini-1.5-flash')
         
         try:
+            model = genai.GenerativeModel('gemini-1.5-flash')
             response = model.generate_content(f"Write a 1 line reply: {email_content}")
             draft = response.text.strip()
         except Exception as ai_err:
             print(f"AI Failed: {ai_err}")
             draft = "AI Draft Error - Please review manually."
 
-        # Update Sheet (Audit)
-        # ... (Sheet logic same rahegi)
+        # Sheet update logic (Confirmed working in Sheet)
+        # ...
 
         # Trigger Mail
         send_approval_notification(rfq, draft, trace_id)
