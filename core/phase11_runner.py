@@ -1,6 +1,14 @@
-import threading, time, os, json, re, gspread, smtplib
+import threading, time, os, json, smtplib
 from email.mime.text import MIMEText
+import gspread
 from google.oauth2.service_account import Credentials
+
+# AI Library ko safely import kar rahe hain taaki backend crash na ho
+try:
+    import google.generativeai as genai
+    AI_AVAILABLE = True
+except ImportError:
+    AI_AVAILABLE = False
 
 def get_audit_client():
     try:
@@ -13,12 +21,12 @@ def get_audit_client():
 def send_approval_notification(rfq, draft_content, trace_id):
     sender = os.environ.get("OWNER_EMAIL")
     password = os.environ.get("TEMP_APP_PASSWORD")
-    base_url = os.environ.get("RAILWAY_STATIC_URL", "level50-backend-final-production.up.railway.app")
-    approve_url = f"https://{base_url}/phase11/approve?trace_id={trace_id}"
+    # Tera Railway URL
+    approve_url = f"https://level50-backend-final-production.up.railway.app/phase11/approve?trace_id={trace_id}"
     
-    body = f"Bhai, {rfq} Approval Req.\n\nDraft:\n{draft_content}\n\n✅ APPROVE: {approve_url}"
+    body = f"Bhai, {rfq} ka Draft taiyar hai.\n\nAI Draft:\n{draft_content}\n\n✅ APPROVE: {approve_url}"
     msg = MIMEText(body)
-    msg['Subject'] = f"🚀 ACTION REQ: {rfq}"
+    msg['Subject'] = f"🚀 ACTION REQ: {rfq} Approval"
     msg['From'] = sender
     msg['To'] = sender 
 
@@ -28,30 +36,36 @@ def send_approval_notification(rfq, draft_content, trace_id):
         server.login(sender, password)
         server.send_message(msg)
         server.quit()
-        print(f"--- SUCCESS: MAIL SENT ---")
+        print("--- SUCCESS: NOTIFICATION MAIL SENT ---")
     except Exception as e:
-        print(f"--- SMTP ERROR: {e} ---")
+        print(f"--- MAIL ERROR: {e} ---")
 
-def _execute_full_governance(trace_id: str, payload: dict):
+def _execute_full_governance(trace_id, payload):
     try:
-        # Step 1: Data Parsing
-        email_content = payload.get("payload_details", {}).get("message", "New Inquiry")
+        email_content = payload.get("payload_details", {}).get("message", "New RFQ")
         rfq = "RFQ-555"
-        draft = f"SYSTEM: Received inquiry - {email_content[:50]}..."
+        draft = "AI Processing..."
 
-        # Step 2: Sheet Update (Audit)
+        # 1. AI Logic (Only if library is installed)
+        if AI_AVAILABLE:
+            try:
+                genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                response = model.generate_content(f"Draft a short reply: {email_content}")
+                draft = response.text.strip()
+            except: draft = "Manual Review Required (AI Error)"
+        
+        # 2. Sheet Audit
         client_sheet, sheet_id = get_audit_client()
         if client_sheet:
             row = [time.strftime("%Y-%m-%d %H:%M:%S"), trace_id, rfq, "UID-80", "DOMESTIC", "MAIN", "STATUS", "NEW", draft, "WAITING_APPROVAL", "WAITING"]
             client_sheet.open_by_key(sheet_id).worksheet("LEVEL_80_CELL_AUDIT").append_row(row)
-            print("--- SHEET UPDATED ---")
 
-        # Step 3: Mail Notification
+        # 3. Trigger Notification
         send_approval_notification(rfq, draft, trace_id)
-        
+
     except Exception as e:
-        print(f"--- RUNNER CRASH: {e} ---")
+        print(f"--- RUNNER ERROR: {e} ---")
 
 def run_phase11_background(trace_id: str, payload: dict):
-    # No external AI library imports here to prevent ImportError
     threading.Thread(target=_execute_full_governance, args=(trace_id, payload), daemon=True).start()
