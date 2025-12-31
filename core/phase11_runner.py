@@ -1,55 +1,57 @@
 import threading, time, os, json, re, gspread, smtplib
 from email.mime.text import MIMEText
-import google.generativeai as genai # Legacy support focus
+from google.oauth2.service_account import Credentials
+
+def get_audit_client():
+    try:
+        creds_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+        sheet_id = os.environ.get("AUDIT_SHEET_ID")
+        creds = Credentials.from_service_account_info(json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"])
+        return gspread.authorize(creds), sheet_id
+    except: return None, None
 
 def send_approval_notification(rfq, draft_content, trace_id):
     sender = os.environ.get("OWNER_EMAIL")
     password = os.environ.get("TEMP_APP_PASSWORD")
-    # Tera domain agar fix hai toh yahan direct likh sakte hain
     base_url = os.environ.get("RAILWAY_STATIC_URL", "level50-backend-final-production.up.railway.app")
     approve_url = f"https://{base_url}/phase11/approve?trace_id={trace_id}"
     
-    body = f"Bhai, {rfq} ka Draft ready hai.\n\nAI Draft:\n{draft_content}\n\n✅ APPROVE: {approve_url}"
+    body = f"Bhai, {rfq} Approval Req.\n\nDraft:\n{draft_content}\n\n✅ APPROVE: {approve_url}"
     msg = MIMEText(body)
-    msg['Subject'] = f"🚀 ACTION REQ: {rfq} Approval"
+    msg['Subject'] = f"🚀 ACTION REQ: {rfq}"
     msg['From'] = sender
     msg['To'] = sender 
 
     try:
-        # Use Port 587 with STARTTLS for Gmail on Railway
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(sender, password)
         server.send_message(msg)
         server.quit()
-        print(f"--- SUCCESS: NOTIFICATION SENT ---")
+        print(f"--- SUCCESS: MAIL SENT ---")
     except Exception as e:
-        print(f"--- SMTP ERROR: {str(e)} ---")
+        print(f"--- SMTP ERROR: {e} ---")
 
 def _execute_full_governance(trace_id: str, payload: dict):
     try:
-        email_content = payload.get("payload_details", {}).get("message", "Inquiry")
+        # Step 1: Data Parsing
+        email_content = payload.get("payload_details", {}).get("message", "New Inquiry")
         rfq = "RFQ-555"
-        
-        # FIX: Explicit Model Config for older SDK compatibility
-        genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-        
-        try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            response = model.generate_content(f"Write a 1 line reply: {email_content}")
-            draft = response.text.strip()
-        except Exception as ai_err:
-            print(f"AI Failed: {ai_err}")
-            draft = "AI Draft Error - Please review manually."
+        draft = f"SYSTEM: Received inquiry - {email_content[:50]}..."
 
-        # Sheet update logic (Confirmed working in Sheet)
-        # ...
+        # Step 2: Sheet Update (Audit)
+        client_sheet, sheet_id = get_audit_client()
+        if client_sheet:
+            row = [time.strftime("%Y-%m-%d %H:%M:%S"), trace_id, rfq, "UID-80", "DOMESTIC", "MAIN", "STATUS", "NEW", draft, "WAITING_APPROVAL", "WAITING"]
+            client_sheet.open_by_key(sheet_id).worksheet("LEVEL_80_CELL_AUDIT").append_row(row)
+            print("--- SHEET UPDATED ---")
 
-        # Trigger Mail
+        # Step 3: Mail Notification
         send_approval_notification(rfq, draft, trace_id)
         
     except Exception as e:
-        print(f"--- CRITICAL RUNNER ERROR: {e} ---")
+        print(f"--- RUNNER CRASH: {e} ---")
 
 def run_phase11_background(trace_id: str, payload: dict):
+    # No external AI library imports here to prevent ImportError
     threading.Thread(target=_execute_full_governance, args=(trace_id, payload), daemon=True).start()
