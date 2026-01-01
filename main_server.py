@@ -1,21 +1,31 @@
 import os
 from fastapi import FastAPI, BackgroundTasks, Query
-import logic_engine  # Ye ab error nahi dega
+from pydantic import BaseModel
+import logic_engine 
 
 app = FastAPI()
 
+# Ye model zaroori hai taaki server tera JSON Body padh sake
+class AutomationRequest(BaseModel):
+    spreadsheet_id: str
+    sheet_name: str = "Production"
+
 @app.get("/")
 async def root():
-    return {"message": "Automation System Online"}
+    return {"message": "System Online - Ready for Phase 17"}
 
 @app.post("/automation/run")
-async def trigger_run(background_tasks: BackgroundTasks, debug: bool = Query(False)):
-    # Render ka timeout bypass karne ke liye background task
-    background_tasks.add_task(logic_engine.run_level50, debug=debug)
-    return {"status": "Started", "info": "Running in background to avoid Render timeout"}
+async def trigger_run(request: AutomationRequest, background_tasks: BackgroundTasks, debug: bool = Query(False)):
+    # Yahan hum logic_engine ke naye function ko data bhej rahe hain
+    background_tasks.add_task(
+        logic_engine.run_level50, 
+        spreadsheet_id=request.spreadsheet_id, 
+        sheet_name=request.sheet_name,
+        debug=debug
+    )
+    return {"status": "Started", "info": "Level 80 scanning in background."}
 
 if __name__ == "__main__":
     import uvicorn
-    # Render ke environment port 10000 ko apne aap utha lega
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
