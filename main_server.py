@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from datetime import datetime, timedelta
 
 # Tere existing system ki imports (Inhe mat chhedna)
-from main_logic import Phase11Processor, Phase17MasterController
+from logic_engine import Phase11Processor, Phase17MasterController
 from google_sheets_handler import SheetsHandler
 
 app = FastAPI(title="Level 80 Automation System - Phase 17")
