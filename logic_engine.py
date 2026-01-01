@@ -5,52 +5,91 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime
 import sys
 
+def classify_status(row, days_diff):
+    """
+    LEVEL-80 AI Status Classification Logic
+    """
+    current_status = str(row.get('CURRENT STATUS', '')).upper()
+    
+    # 1. RFQ LIFECYCLE CHECK
+    if not row.get('RFQ NO'): return "NEW_RFQ"
+    if "CLOSED" in current_status or "ORDER" in current_status: return "CLOSED"
+
+    # 2. VENDOR INTERACTION LAYER
+    if "INQUIRY SENT" in current_status:
+        if days_diff >= 10: return "VENDOR_PENDING_OVERDUE"
+        if days_diff >= 3: return "VENDOR_PENDING_3D"
+        return "VENDOR_PENDING"
+
+    # 3. CLIENT INTERACTION LAYER (Post-Quote Intelligence)
+    if "OFFER SENT" in current_status or "QUOTE SENT" in current_status:
+        # Detect Client Queries (Keywords based on your Level-80 rules)
+        remarks = str(row.get('REMARKS', '')).lower()
+        if any(word in remarks for word in ['discount', 'revise', 'better price']):
+            return "CLIENT_DISCOUNT_REQUEST"
+        if any(word in remarks for word in ['drawing', 'gad', 'datasheet']):
+            return "CLIENT_DOCUMENT_QUERY"
+        return "CLIENT_PENDING"
+
+    # 4. SAFETY / AMBIGUOUS
+    if not current_status: return "AMBIGUOUS"
+    
+    return "IN_PROGRESS"
+
 def run_level50(spreadsheet_id, sheet_name="RFQ TEST SHEET", debug=False):
-    print(f"DEBUG: Task Started for Sheet ID: {spreadsheet_id}")
+    print(f"🚀 LEVEL-80 AI STARTING...")
     sys.stdout.flush()
     
     try:
-        # 1. Render ke Environment Variable se JSON uthao
+        # Auth and Sheet Connection (using your Env Var)
         info_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
-        
-        if not info_json:
-            print("ERROR: GOOGLE_SERVICE_ACCOUNT_JSON variable not found in Render Environment!")
-            return
-
-        # 2. JSON String ko Python Dictionary mein badlo
         info = json.loads(info_json)
-        
-        # 3. Credentials set karo
-        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(info, scopes=scopes)
-        
-        # 4. Gspread connect karo
+        creds = Credentials.from_service_account_info(info, scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"])
         gc = gspread.authorize(creds)
         sh = gc.open_by_key(spreadsheet_id)
         worksheet = sh.worksheet(sheet_name)
         
-        # 5. Data read karo
         data = worksheet.get_all_records()
-        print(f"SUCCESS: Connected to Google Sheets. Found {len(data)} rows.")
+        print(f"SUCCESS: Scanning {len(data)} rows with Level-80 Context.")
         sys.stdout.flush()
 
         today = datetime.now()
-        overdue_count = 0
+        buckets = {
+            "VENDOR_PENDING": [],
+            "CLIENT_FOLLOWUPS": [],
+            "CLARIFICATIONS": [],
+            "MANUAL_REVIEW": []
+        }
 
         for i, row in enumerate(data, start=2):
-            rfq_date_str = row.get('Date')
-            status = row.get('Status')
+            due_date_str = row.get('DUE DATE')
+            days_diff = 0
             
-            if rfq_date_str and status != 'Closed':
-                # Date format: 25/12/2025
-                rfq_date = datetime.strptime(rfq_date_str, "%d/%m/%Y")
-                diff = (today - rfq_date).days
-                
-                if diff >= 10:
-                    print(f"ROW {i}: RFQ is {diff} days old. Sending alert...")
-                    overdue_count += 1
-        
-        print(f"FINISH: Processed {len(data)} rows. Total Overdue: {overdue_count}")
+            if due_date_str:
+                try:
+                    due_date = datetime.strptime(str(due_date_str), "%d/%m/%Y")
+                    days_diff = (today - due_date).days
+                except: pass
+
+            # GET AI CLASSIFICATION
+            ai_status = classify_status(row, days_diff)
+
+            # MAP TO REMINDER BUCKETS (Phase-14)
+            if "VENDOR_PENDING" in ai_status:
+                buckets["VENDOR_PENDING"].append(f"Row {i}: {row.get('RFQ NO')} ({days_diff} days)")
+            elif "CLIENT_PENDING" in ai_status:
+                buckets["CLIENT_FOLLOWUPS"].append(f"Row {i}: Follow-up for {row.get('CUSTOMER NAME')}")
+            elif "QUERY" in ai_status or "REJECT" in ai_status:
+                buckets["CLARIFICATIONS"].append(f"Row {i}: Action on {ai_status}")
+            elif ai_status == "AMBIGUOUS":
+                buckets["MANUAL_REVIEW"].append(f"Row {i}: Missing status")
+
+        # Output Results
+        for bucket, items in buckets.items():
+            if items:
+                print(f"--- {bucket} ({len(items)}) ---")
+                for item in items[:5]: print(f"  > {item}")
+
         sys.stdout.flush()
 
     except Exception as e:
