@@ -6,13 +6,10 @@ from datetime import datetime
 import sys
 
 def run_level50(spreadsheet_id, sheet_name="RFQ TEST SHEET", debug=False):
-    # Render se Audit ki ID aur Tab Name uthana
-    audit_id = os.environ.get("AUDIT_SHEET_ID") 
-    audit_tab = os.environ.get("AUDIT_TAB", "LEVEL_80_AUDIT_LOG")
+    # Render Environment Variables
+    audit_id = os.environ.get("AUDIT_SHEET_ID")
     
-    print(f"🚀 LEVEL-80 AI STARTING...")
-    print(f"📂 Data Source: {spreadsheet_id}")
-    print(f"📊 Audit Destination: {audit_id}")
+    print(f"🚀 LEVEL-80 TRIPLE SYNC STARTING...")
     sys.stdout.flush()
     
     try:
@@ -21,32 +18,42 @@ def run_level50(spreadsheet_id, sheet_name="RFQ TEST SHEET", debug=False):
         creds = Credentials.from_service_account_info(info, scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"])
         gc = gspread.authorize(creds)
         
-        # 1. READ FROM RFQ SHEET
+        # 1. READ SOURCE DATA
         sh_data = gc.open_by_key(spreadsheet_id)
         worksheet = sh_data.worksheet(sheet_name)
         data = worksheet.get_all_records()
-        print(f"✅ Data Read Success: {len(data)} rows.")
+        
+        # 2. CONNECT TO AUDIT FILE
+        sh_audit = gc.open_by_key(audit_id)
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        trace_id = f"L80-{datetime.now().strftime('%H%M%S')}"
 
-        # 2. WRITE TO AUDIT SHEET (Alag File)
-        if audit_id:
-            try:
-                sh_audit = gc.open_by_key(audit_id)
-                audit_ws = sh_audit.worksheet(audit_tab)
-                
-                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                # Tere exact column format ke hisaab se:
-                # Timestamp, TraceID/Action, Rows, Status
-                audit_row = [now, "LEVEL_80_SCAN", len(data), "SUCCESS"]
-                
-                audit_ws.append_row(audit_row, value_input_option='USER_ENTERED')
-                print(f"✅ Audit Log Updated in ASLI Sheet: {sh_audit.title} -> {audit_tab}")
-            except Exception as e:
-                print(f"⚠️ Audit Update Failed: {str(e)}")
-        else:
-            print("❌ AUDIT_SHEET_ID not found in Environment Variables!")
+        # --- TAB 1: LEVEL_80_AUDIT_LOG (Daily Summary) ---
+        ws_log = sh_audit.worksheet("LEVEL_80_AUDIT_LOG")
+        ws_log.append_row([now, trace_id, "PHASE-80", "DAILY_SCAN_COMPLETE", "SUCCESS", len(data)], value_input_option='USER_ENTERED')
+        print("✅ Sync 1/3: AUDIT_LOG Updated.")
+
+        # --- TAB 2: LEVEL_80_RUN_AUDIT (Execution Trace) ---
+        ws_run = sh_audit.worksheet("LEVEL_80_RUN_AUDIT")
+        ws_run.append_row([now, trace_id, "phase80_AI", "AUTO_DETECT", "DONE", len(data), len(data), "No Errors", "{} "], value_input_option='USER_ENTERED')
+        print("✅ Sync 2/3: RUN_AUDIT Updated.")
+
+        # --- TAB 3: LEVEL_80_CELL_AUDIT (Specific Actions) ---
+        # Yahan hum sirf un RFQs ko daalte hain jinpar action hona hai
+        ws_cell = sh_audit.worksheet("LEVEL_80_CELL_AUDIT")
+        action_count = 0
+        for i, row in enumerate(data, start=2):
+            # Example condition: Agar status missing hai ya koi draft ban raha hai
+            if not row.get('CURRENT STATUS') or action_count < 5: # Limit for testing
+                ws_cell.append_row([
+                    now, trace_id, row.get('RFQ NO', 'N/A'), row.get('UID NO', 'N/A'), 
+                    "RFQ TEST SHEET", "MAIN_TRACKER", i, "STATUS", "NEW"
+                ], value_input_option='USER_ENTERED')
+                action_count += 1
+        print(f"✅ Sync 3/3: CELL_AUDIT Updated with {action_count} rows.")
 
         sys.stdout.flush()
 
     except Exception as e:
-        print(f"❌ CRITICAL ERROR: {str(e)}")
+        print(f"❌ TRIPLE SYNC ERROR: {str(e)}")
         sys.stdout.flush()
