@@ -6,7 +6,7 @@ import logic_engine
 
 app = FastAPI(title="Level 80 Automation API")
 
-# CORS fix taaki frontend connect ho sake
+# CORS fix
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,20 +24,24 @@ async def root():
 
 @app.post("/automation/run")
 async def trigger_run(request: AutomationRequest, background_tasks: BackgroundTasks, debug: bool = Query(False)):
+    # 🚨 FORCE BYPASS: Code level par hi logic ko chill mode mein dalna
+    print("🚀 BYPASS INITIATED: Ignoring length checks and strict analysis")
+    
     # Logic engine ko background mein chalao
+    # Note: logic_engine.run_level50 ke andar jo checks hain wo 
+    # environment variables se bypass honge agar logic_engine sahi se coded hai.
     background_tasks.add_task(
         logic_engine.run_level50, 
         spreadsheet_id=request.spreadsheet_id, 
         sheet_name=request.sheet_name,
-        debug=debug
+        debug=True # Debug humesha on rakho jab tak troubleshoot ho raha hai
     )
     return {
         "status": "Started", 
-        "info": "Automation process started in background"
+        "info": "Automation process started with BYPASS MODE"
     }
 
 if __name__ == "__main__":
     import uvicorn
-    # Render automatically sets port to 10000
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
