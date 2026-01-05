@@ -5,11 +5,12 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime
 import sys
 
-# 🔒 RULE-0: In columns ko AI kabhi touch nahi karega
-LOCKED_COLUMNS = ['SALES PERSON', 'CUSTOMER NAME', 'LOCATION', 'RFQ NO', 'RFQ DATE', 'PRODUCT', 'UID NO', 'UID DATE', 'DUE DATE', 'VENDOR', 'CONCERN PERSON']
+# 🔒 RULE-0: In columns ko AI kabhi touch nahi karega (Sirf updates ke liye)
+LOCKED_COLUMNS = ['UID NO', 'UID DATE']
 
 def run_level50(spreadsheet_id, sheet_name="RFQ TEST SHEET", debug=False):
     audit_id = os.environ.get("AUDIT_SHEET_ID")
+    audit_tab_name = os.environ.get("AUDIT_TAB", "LEVEL_80_CELL_AUDIT")
     trace_id = f"L80-{datetime.now().strftime('%d%H%M%S')}"
     
     print(f"🚀 LEVEL-80 SYSTEM STARTING | Trace: {trace_id}")
@@ -17,8 +18,15 @@ def run_level50(spreadsheet_id, sheet_name="RFQ TEST SHEET", debug=False):
     
     try:
         # Auth & Setup
-        info = json.loads(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"))
-        creds = Credentials.from_service_account_info(info, scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"])
+        service_account_info = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+        if not service_account_info:
+            raise Exception("GOOGLE_SERVICE_ACCOUNT_JSON variable not found")
+            
+        info = json.loads(service_account_info)
+        creds = Credentials.from_service_account_info(info, scopes=[
+            "https://www.googleapis.com/auth/spreadsheets", 
+            "https://www.googleapis.com/auth/drive"
+        ])
         gc = gspread.authorize(creds)
         
         # Open Sheets
@@ -26,47 +34,59 @@ def run_level50(spreadsheet_id, sheet_name="RFQ TEST SHEET", debug=False):
         ws_prod = sh_prod.worksheet(sheet_name)
         sh_audit = gc.open_by_key(audit_id)
         
-        headers = ws_prod.row_values(1)
-        data = ws_prod.get_all_records()
-
         # 🛡️ FAIL-PROOF: Run Audit Entry
-        ws_run = sh_audit.worksheet("LEVEL_80_RUN_AUDIT")
-        ws_run.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), trace_id, "AUTO_MODE", "RUNNING", len(data)], value_input_option='USER_ENTERED')
+        try:
+            ws_run = sh_audit.worksheet("LEVEL_80_RUN_AUDIT")
+            ws_run.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), trace_id, "AUTO_MODE", "RUNNING"], value_input_option='USER_ENTERED')
+        except:
+            print("⚠️ RUN_AUDIT tab missing, skipping...")
 
-        cell_audits = []
+        # --- NEW ENTRY LOGIC (FOR GMAIL DATA) ---
+        # Note: Gmail se aaya hua data agar naya hai toh hum use append karenge
+        # Yahan hum maan rahe hain AI ne data extract kar liya hai
+        
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        new_uid = f"VEPL{datetime.now().strftime('%y%m%d%H%M%S')}"
+        
+        # Test Data (AI Extraction Placeholder)
+        # Agar MOCK mode hai toh ye direct likhega
+        new_row = [
+            "AI_SALES",           # SALES PERSON
+            "RAKESH KUMAR",       # CUSTOMER NAME
+            "VADODARA",           # LOCATION
+            "RFQ-NEW",            # RFQ NO
+            timestamp,            # RFQ DATE
+            "BALL VALVES",        # PRODUCT
+            new_uid,              # UID NO
+            timestamp,            # UID DATE
+            "",                   # DUE DATE
+            "PENDING",            # VENDOR
+            "AI_ENGINE"           # CONCERN PERSON
+        ]
 
-        # Logic: AI identifies row via UID NO
-        for i, row in enumerate(data, start=2):
-            uid = str(row.get('UID NO', '')).strip()
-            if not uid: continue
+        # Writing to Production
+        ws_prod.append_row(new_row, value_input_option='USER_ENTERED')
+        print(f"✅ Data Written to {sheet_name}")
 
-            # AI Logic Placeholder (Example: If Mail received, update status)
-            # Yahan hum maan rahe hain ki AI ne status badla hai
-            target_col = 'RFQ STATUS'
-            new_val = "AI_UPDATED" 
-            old_val = row.get(target_col)
-
-            if old_val != new_val and target_col not in LOCKED_COLUMNS:
-                col_idx = headers.index(target_col) + 1
-                
-                # Snapshot & Update
-                ws_prod.update_cell(i, col_idx, new_val)
-                
-                # Prepare Forensic Audit
-                cell_audits.append([
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"), trace_id, 
-                    row.get('RFQ NO'), uid, target_col, str(old_val), new_val, "RULE-0_PASSED", "SUCCESS"
-                ])
-
-        # Batch Write Cell Audits (Future-Proof)
-        if cell_audits:
-            ws_cell = sh_audit.worksheet("LEVEL_80_CELL_AUDIT")
-            ws_cell.append_rows(cell_audits, value_input_option='USER_ENTERED')
+        # Forensic Audit Entry
+        ws_cell = sh_audit.worksheet(audit_tab_name)
+        ws_cell.append_row([
+            timestamp, trace_id, "NEW_RFQ", new_uid, "ALL", "NONE", "NEW_ENTRY", "SUCCESS"
+        ], value_input_option='USER_ENTERED')
 
         # Final Log
         ws_log = sh_audit.worksheet("LEVEL_80_AUDIT_LOG")
-        ws_log.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), trace_id, "SCAN_COMPLETE", "SUCCESS", len(cell_audits)], value_input_option='USER_ENTERED')
+        ws_log.append_row([timestamp, trace_id, "SCAN_COMPLETE", "SUCCESS", "1_ENTRY_ADDED"], value_input_option='USER_ENTERED')
+        
+        print(f"🏁 SYSTEM SUCCESS: Trace {trace_id}")
 
     except Exception as e:
-        print(f"❌ SYSTEM CRASH PREVENTED: {str(e)}")
+        error_msg = str(e)
+        print(f"❌ SYSTEM CRASH PREVENTED: {error_msg}")
+        # Audit the failure
+        try:
+            ws_log = sh_audit.worksheet("LEVEL_80_AUDIT_LOG")
+            ws_log.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), trace_id, "CRASH", error_msg], value_input_option='USER_ENTERED')
+        except:
+            pass
         sys.stdout.flush()
