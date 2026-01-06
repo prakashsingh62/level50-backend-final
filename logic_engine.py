@@ -5,51 +5,39 @@ import sys
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 
+# 🔒 RULE-0: In columns ko AI/Automation kabhi touch nahi karega
+LOCKED_COLUMNS = ['SALES PERSON', 'CUSTOMER NAME', 'LOCATION', 'RFQ NO', 'RFQ DATE', 'PRODUCT', 'UID NO', 'UID DATE', 'DUE DATE', 'VENDOR', 'CONCERN PERSON']
+
 def run_level50(spreadsheet_id, sheet_name="RFQ TEST SHEET", debug=False):
-    # 1. Trace ID & Initial Log
     trace_id = f"L80-{datetime.now().strftime('%d%H%M%S')}"
-    print(f"🚀 BYPASSING ALL AI | Trace: {trace_id}")
+    print(f"🚀 CLEAN START | Trace: {trace_id} | BYPASSING GEMINI")
     sys.stdout.flush()
     
     try:
-        # 2. Auth Setup
+        # Auth Setup
         service_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
-        if not service_json:
-            raise Exception("Service Account JSON environment variable is missing!")
-            
         info = json.loads(service_json)
-        creds = Credentials.from_service_account_info(
-            info, 
-            scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        )
+        creds = Credentials.from_service_account_info(info, scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"])
         gc = gspread.authorize(creds)
         
-        # 3. Open Worksheet
-        sh_prod = gc.open_by_key(spreadsheet_id)
-        ws_prod = sh_prod.worksheet(sheet_name)
+        # Open Sheet
+        ws_prod = gc.open_by_key(spreadsheet_id).worksheet(sheet_name)
+        headers = ws_prod.row_values(1)
         
-        # 4. Prepare Direct Entry (No AI needed)
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # Structure: SALES, CUSTOMER, LOCATION, RFQ NO, DATE, PRODUCT, UID, UID DATE, DUE, VENDOR, CONCERN
-        new_row = [
-            "FORCE_ENTRY", 
-            "TEST_CLIENT", 
-            "VADODARA", 
-            f"RFQ-{datetime.now().strftime('%M%S')}", 
-            ts, 
-            "VALVE_UNIT", 
-            f"VEPL{datetime.now().strftime('%y%m%d%H%M%S')}", 
-            ts, 
-            "", 
-            "PENDING", 
-            "SYSTEM_BYPASS"
-        ]
+        # 🛡️ Sirf un columns mein data dalna jo LOCKED nahi hain
+        # Maan lo humein 'RFQ STATUS' (Column L) update karna hai
+        target_col = "RFQ STATUS" 
         
-        # 5. Write to Sheet
-        ws_prod.append_row(new_row, value_input_option='USER_ENTERED')
-        print(f"✅ Sheet Updated Successfully! Row Added with UID: {new_row[6]}")
+        if target_col not in LOCKED_COLUMNS:
+            # Test ke liye hum Row 2 par update karke dekhte hain
+            col_idx = headers.index(target_col) + 1
+            ws_prod.update_cell(2, col_idx, "BYPASS_SUCCESS")
+            print(f"✅ Row 2, Column {target_col} updated successfully!")
+        else:
+            print(f"⚠️ Cannot update {target_col}, it is LOCKED!")
+            
         sys.stdout.flush()
         
     except Exception as e:
-        print(f"❌ Error in Logic Engine: {str(e)}")
+        print(f"❌ LOGIC ERROR: {str(e)}")
         sys.stdout.flush()
