@@ -9,7 +9,7 @@ def run_level50(spreadsheet_id, sheet_name="RFQ TEST SHEET", debug=False):
     audit_id = os.environ.get("AUDIT_SHEET_ID")
     trace_id = f"L80-{datetime.now().strftime('%d%H%M%S')}"
     
-    print(f"🚀 BYPASS MODE: Level-80 Starting | Trace: {trace_id}")
+    print(f"🚀 BYPASS MODE ACTIVE | Trace: {trace_id}")
     sys.stdout.flush()
     
     try:
@@ -25,20 +25,20 @@ def run_level50(spreadsheet_id, sheet_name="RFQ TEST SHEET", debug=False):
         sh_prod = gc.open_by_key(spreadsheet_id)
         ws_prod = sh_prod.worksheet(sheet_name)
         
-        # 🛡️ MOCK DATA (Bypassing AI completely)
+        # 🛡️ DIRECT DATA (Bypassing AI Model)
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         new_uid = f"VEPL{datetime.now().strftime('%y%m%d%H%M%S')}"
         
-        # Row data structure matching your RFQ TEST SHEET
+        # Ye row direct sheet mein jayegi
         new_row = [
-            "BYPASS_SALES", "TEST CUSTOMER", "VADODARA", "RFQ-BYPASS-01", 
-            timestamp, "VALVES", new_uid, timestamp, "", "PENDING", "SYSTEM_AUTO"
+            "BYPASS_SALES", "TEST_BYPASS", "VADODARA", "RFQ-FINAL-BYPASS", 
+            timestamp, "VALVE_TEST", new_uid, timestamp, "", "PENDING", "SYSTEM"
         ]
 
         # Writing to Sheet
         ws_prod.append_row(new_row, value_input_option='USER_ENTERED')
-        print(f"✅ SUCCESS: Data written directly to Sheet | Trace: {trace_id}")
+        print(f"✅ SUCCESS: Sheet Updated | Trace: {trace_id}")
 
     except Exception as e:
-        print(f"❌ FINAL CRASH: {str(e)}")
+        print(f"❌ FINAL ERROR: {str(e)}")
         sys.stdout.flush()
