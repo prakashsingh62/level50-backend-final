@@ -1,21 +1,26 @@
+# config.py - COMPLETE VERSION
 import os
 import json
 
 CLIENT_SECRET_JSON = json.loads(os.getenv("CLIENT_SECRET_JSON", "{}"))
 
 # MAIN SHEET
-PROD_SHEET_ID = os.getenv("PROD_SHEET_ID")
-PROD_TAB = os.getenv("PROD_TAB")
+PROD_SHEET_ID = os.getenv("PROD_SHEET_ID", "1hKMwlnN3GAE4dxVGvq2WHT2-Om9SJ3P91L8cxioAeoo")
+PROD_TAB = os.getenv("PROD_TAB", "RFQ TEST SHEET")
 
-# LEGACY COMPAT (DO NOT TOUCH)
-SHEET_ID = PROD_SHEET_ID
+# AUDIT SHEET
+AUDIT_SHEET_ID = os.getenv("AUDIT_SHEET_ID", "1g4BKp2ma8-vZPxSokAv3v8hwcF1R39fb2bmWi1_yGMc")
+AUDIT_TAB = os.getenv("AUDIT_TAB", "LEVEL_80_AUDIT_LOG")
 
-# ✅ SINGLE AUDIT SOURCE OF TRUTH
-AUDIT_SHEET_ID = os.getenv(
-    "AUDIT_SHEET_ID",
-    "1g4BXp2wa6-vZPxSokAv3v8hwoFiR39fb2bmVNi_y0Mc"
-)
+# AI SETTINGS
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+AI_CONFIDENCE_THRESHOLD = int(os.getenv("AI_CONFIDENCE_THRESHOLD", "95"))
+ENABLE_AI_FALLBACK = os.getenv("ENABLE_AI_FALLBACK", "TRUE").upper() == "TRUE"
 
-AUDIT_TAB = "LEVEL_80_AUDIT_LOG"
-
+# SYSTEM SETTINGS
 MODE = os.getenv("MODE", "PROD")
+SKIP_AUDIT = os.getenv("SKIP_AUDIT", "FALSE").upper() == "TRUE"
+DISABLE_ALL_CHECKS = os.getenv("DISABLE_ALL_CHECKS", "FALSE").upper() == "TRUE"
+
+# LEGACY COMPAT
+SHEET_ID = PROD_SHEET_ID
