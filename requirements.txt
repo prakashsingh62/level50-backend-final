@@ -1,12 +1,36 @@
-fastapi
-uvicorn
-google-auth
-google-auth-oauthlib
-google-auth-httplib2
-google-api-python-client
-requests
-jinja2
-python-dotenv
-gspread
-pytz
-google-generativeai
+# Core Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# Google APIs & Authentication
+google-auth>=2.23.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.1.0
+google-api-python-client>=2.105.0
+gspread>=5.11.0
+
+# Google AI & Generative AI
+google-generativeai>=0.3.0
+
+# Google Sheets & Drive Specific
+oauth2client>=4.1.3
+
+# Email Processing
+email-validator>=2.0.0
+
+# Data Processing & Utilities
+requests>=2.31.0
+jinja2>=3.1.2
+python-dotenv>=1.0.0
+pytz>=2023.3
+pydantic>=2.5.0
+
+# Date/Time
+python-dateutil>=2.8.2
+
+# Type Hints & Development
+typing-extensions>=4.8.0
+
+# Optional (But Recommended)
+httpx>=0.25.0  # For async HTTP requests
+websockets>=12.0  # For WebSocket support
