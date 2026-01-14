@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, BackgroundTasks, Query
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import logic_engine
@@ -151,26 +151,33 @@ async def root():
     }
 
 @app.post("/automation/run")
-async def trigger_run(request: AutomationRequest, background_tasks: BackgroundTasks, debug: bool = Query(False)):
+async def trigger_run(request: AutomationRequest, debug: bool = Query(False)):
     """
-    Automation process start karne ke liye
+    Automation process start karne ke liye (SYNC VERSION)
     """
-    print("🚀 Automation started")  # 🔴 PRINT MESSAGE CHANGED
+    print("🚀 DIRECT EXECUTION STARTED")
+    print(f"📁 Spreadsheet: {request.spreadsheet_id}")
+    print(f"📄 Sheet: {request.sheet_name}")
     
-    # Logic engine ko background mein chalao
-    background_tasks.add_task(
-        logic_engine.run_level50, 
-        spreadsheet_id=request.spreadsheet_id, 
-        sheet_name=request.sheet_name,
-        debug=debug  # 🔴 NOW CONTROLLED BY QUERY PARAM
-    )
+    # Direct call (no background task)
+    try:
+        logic_engine.run_level50(
+            spreadsheet_id=request.spreadsheet_id, 
+            sheet_name=request.sheet_name,
+            debug=debug
+        )
+        print("✅ Automation completed successfully")
+    except Exception as e:
+        print(f"❌ Automation failed: {e}")
+        import traceback
+        traceback.print_exc()
     
     return {
         "status": "Started", 
         "info": "Automation process started",
         "spreadsheet_id": request.spreadsheet_id,
         "sheet_name": request.sheet_name,
-        "timestamp": datetime.now().isoformat()  # 🔴 ACTUAL TIMESTAMP
+        "timestamp": datetime.now().isoformat()
     }
 
 @app.get("/health")
