@@ -161,7 +161,7 @@ async def trigger_run(request: AutomationRequest, background_tasks: BackgroundTa
         logic_engine.run_level50, 
         spreadsheet_id=request.spreadsheet_id, 
         sheet_name=request.sheet_name,
-        debug=True  # Debug humesha on rakho jab tak troubleshoot ho raha hai
+        debug=debug  # Debug humesha on rakho jab tak troubleshoot ho raha hai
     )
     
     return {
