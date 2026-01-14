@@ -5,6 +5,7 @@ from pydantic import BaseModel
 import logic_engine
 from typing import List, Optional
 import json
+from datetime import datetime  # 🔴 IMPORT ADDED
 
 app = FastAPI(title="Level 80 Automation API")
 
@@ -154,14 +155,14 @@ async def trigger_run(request: AutomationRequest, background_tasks: BackgroundTa
     """
     Automation process start karne ke liye
     """
-    print("🚀 BYPASS INITIATED: Ignoring length checks and strict analysis")
+    print("🚀 Automation started")  # 🔴 PRINT MESSAGE CHANGED
     
     # Logic engine ko background mein chalao
     background_tasks.add_task(
         logic_engine.run_level50, 
         spreadsheet_id=request.spreadsheet_id, 
         sheet_name=request.sheet_name,
-        debug=debug  # Debug humesha on rakho jab tak troubleshoot ho raha hai
+        debug=debug  # 🔴 NOW CONTROLLED BY QUERY PARAM
     )
     
     return {
@@ -169,7 +170,7 @@ async def trigger_run(request: AutomationRequest, background_tasks: BackgroundTa
         "info": "Automation process started",
         "spreadsheet_id": request.spreadsheet_id,
         "sheet_name": request.sheet_name,
-        "timestamp": "2024-01-20T10:30:00"  # Add actual timestamp
+        "timestamp": datetime.now().isoformat()  # 🔴 ACTUAL TIMESTAMP
     }
 
 @app.get("/health")
@@ -180,7 +181,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "Level 80 Automation API",
-        "timestamp": "2024-01-20T10:30:00",  # Add actual timestamp logic
+        "timestamp": datetime.now().isoformat(),  # 🔴 ACTUAL TIMESTAMP
         "version": "1.0.0"
     }
 
