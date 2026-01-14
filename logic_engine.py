@@ -13,8 +13,44 @@ def run_level50(spreadsheet_id, sheet_name="RFQ TEST SHEET", debug=False):
     """
     print(f"🚀 Automation Started: {datetime.now().strftime('%H:%M:%S')}")
     
+    # 🔴 DEBUG CODE ADDED HERE
+    print(f"🎯 Target: {spreadsheet_id}, Sheet: {sheet_name}")
+    print(f"📧 Service account: level50-backend-final@vepl-rfq.iam.gserviceaccount.com")
+    
     try:
-        # 1. GOOGLE SHEETS CONNECT
+        # DEBUG: Try to load credentials and list accessible sheets
+        info = json.loads(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"))
+        print(f"✅ JSON loaded, key ID: {info['private_key_id'][:10]}...")
+        
+        creds = Credentials.from_service_account_info(
+            info, 
+            scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        )
+        gc = gspread.authorize(creds)
+        
+        # LIST ALL ACCESSIBLE SHEETS FIRST
+        print("🔍 Listing ALL accessible sheets...")
+        all_sheets = gc.openall()
+        print(f"   Found {len(all_sheets)} sheets")
+        
+        for s in all_sheets:
+            print(f"   - {s.id} : {s.title}")
+            if spreadsheet_id in s.id:
+                print(f"      🎯 TARGET FOUND!")
+        
+        # NOW TRY TO OPEN SPECIFIC SHEET
+        print(f"\n🎯 Attempting to open: {spreadsheet_id}")
+        ws = gc.open_by_key(spreadsheet_id).worksheet(sheet_name)
+        print(f"✅ SUCCESS! Opened: {ws.title}")
+        
+    except Exception as e:
+        print(f"❌ FAILED: {type(e).__name__}: {e}")
+        print("💡 Check: 1. Spreadsheet sharing 2. Sheet name exists 3. Internet access")
+        return
+    # 🔴 DEBUG CODE ENDS HERE
+    
+    try:
+        # 1. GOOGLE SHEETS CONNECT (Again for main logic)
         info = json.loads(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"))
         creds = Credentials.from_service_account_info(
             info, 
