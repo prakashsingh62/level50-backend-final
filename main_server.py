@@ -166,7 +166,7 @@ async def trigger_run(request: AutomationRequest, background_tasks: BackgroundTa
     
     return {
         "status": "Started", 
-        "info": "Automation process started with BYPASS MODE",
+        "info": "Automation process started",
         "spreadsheet_id": request.spreadsheet_id,
         "sheet_name": request.sheet_name,
         "timestamp": "2024-01-20T10:30:00"  # Add actual timestamp
