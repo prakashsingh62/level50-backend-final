@@ -49,9 +49,12 @@ class LogicEngine:
             try:
                 self.worksheet = self.spreadsheet.worksheet(self.worksheet_name)
                 logger.info(f"Worksheet found: {self.worksheet_name}")
+                # Check headers
+                current_headers = self.worksheet.row_values(1)
+                logger.info(f"Current headers ({len(current_headers)} columns): {current_headers}")
             except gspread.WorksheetNotFound:
                 logger.info(f"Creating new worksheet: {self.worksheet_name}")
-                self.worksheet = self.spreadsheet.add_worksheet(title=self.worksheet_name, rows=1000, cols=20)
+                self.worksheet = self.spreadsheet.add_worksheet(title=self.worksheet_name, rows=1000, cols=35)
                 self._initialize_headers()
             
             logger.info("=" * 60)
@@ -63,20 +66,19 @@ class LogicEngine:
             raise
     
     def _initialize_headers(self):
-        # UPDATED HEADERS - Match your Google Sheet
+        # MATCHING YOUR ACTUAL SHEET HEADERS
         headers = [
-            'RFQ ID', 
-            'CUSTOMER NAME', 
-            'PRODUCT', 
-            'QTY',
-            'CONCERN PERSON 1',
-            'REMARKS 1',
-            'CONCERN PERSON 2', 
-            'REMARKS 2',
-            'STATUS',
-            'TIMESTAMP'
+            'SR.NO', 'SALES PERSON', 'CUSTOMER NAME', 'LOCATION', 'RFQ NO', 'RFQ DATE',
+            'PRODUCT', 'UID NO', 'UID DATE', 'DUE DATE', 'VENDOR', 'CONCERN PERSON 1',
+            'INQUIRY SENT ON', 'VENDOR QUOTATION STATUS', 'VENDOR QUOTATION NO.', 
+            'VENDOR QUOTATION DATE', 'CONCERN PERSON 2', 'VEPL OFFER NO.',
+            'VEPL OFFER DATE', 'VEPL OFFER VALUE', 'CURRENT STATUS', 'FINAL STATUS',
+            'POST OFFER QUERY', 'POST QUERY DATE', 'REMARKS 1', 'FOLLOWUP CONCERN PERSON',
+            'FOLLOWUP DATE', 'FOLLOWUP EMAIL', 'FOLLOWUP CALL', 'REMARKS 2',
+            'Vendor Follow-up Aging', 'Aging', 'SYSTEM CATEGORY', 'LAST EMAIL DATE',
+            'SYSTEM NOTES'
         ]
-        self.worksheet.update('A1:J1', [headers])  # 10 columns
+        self.worksheet.update('A1:AI1', [headers])  # 35 columns (A to AI)
         logger.info("Headers initialized")
     
     def test_connection(self):
@@ -90,22 +92,50 @@ class LogicEngine:
         try:
             timestamp = datetime.now(timezone.utc).isoformat()
             
-            # UPDATED ROW DATA - Match your sheet structure
+            # MAP API DATA TO YOUR SHEET COLUMNS
             row_data = [
-                rfq_data.get('rfq_id', ''),
-                rfq_data.get('customer_name', ''),
-                json.dumps(rfq_data.get('product_details', {})),  # Goes to PRODUCT column
-                rfq_data.get('quantity', ''),
-                rfq_data.get('concern_person_1', ''),  # New field
-                rfq_data.get('remarks_1', ''),        # New field
-                rfq_data.get('concern_person_2', ''),  # New field
-                rfq_data.get('remarks_2', ''),        # New field
-                rfq_data.get('status', 'submitted'),
-                timestamp
+                '',  # SR.NO (auto-increment)
+                rfq_data.get('sales_person', ''),  # SALES PERSON
+                rfq_data.get('customer_name', ''),  # CUSTOMER NAME
+                rfq_data.get('location', ''),  # LOCATION
+                rfq_data.get('rfq_id', ''),  # RFQ NO (using rfq_id from API)
+                rfq_data.get('rfq_date', timestamp.split('T')[0]),  # RFQ DATE
+                json.dumps(rfq_data.get('product_details', {})),  # PRODUCT
+                rfq_data.get('uid_no', ''),  # UID NO
+                rfq_data.get('uid_date', ''),  # UID DATE
+                rfq_data.get('due_date', ''),  # DUE DATE
+                rfq_data.get('vendor', ''),  # VENDOR
+                rfq_data.get('concern_person_1', ''),  # CONCERN PERSON 1
+                rfq_data.get('inquiry_sent_on', ''),  # INQUIRY SENT ON
+                '',  # VENDOR QUOTATION STATUS
+                '',  # VENDOR QUOTATION NO.
+                '',  # VENDOR QUOTATION DATE
+                rfq_data.get('concern_person_2', ''),  # CONCERN PERSON 2
+                '',  # VEPL OFFER NO.
+                '',  # VEPL OFFER DATE
+                '',  # VEPL OFFER VALUE
+                'Submitted',  # CURRENT STATUS
+                '',  # FINAL STATUS
+                '',  # POST OFFER QUERY
+                '',  # POST QUERY DATE
+                rfq_data.get('remarks_1', ''),  # REMARKS 1
+                rfq_data.get('followup_concern_person', ''),  # FOLLOWUP CONCERN PERSON
+                '',  # FOLLOWUP DATE
+                '',  # FOLLOWUP EMAIL
+                '',  # FOLLOWUP CALL
+                rfq_data.get('remarks_2', ''),  # REMARKS 2
+                '',  # Vendor Follow-up Aging
+                '',  # Aging
+                rfq_data.get('system_category', 'API Generated'),  # SYSTEM CATEGORY
+                '',  # LAST EMAIL DATE
+                rfq_data.get('system_notes', 'Submitted via API')  # SYSTEM NOTES
             ]
             
             self.worksheet.append_row(row_data, value_input_option='USER_ENTERED')
             row_number = len(self.worksheet.get_all_values())
+            
+            # Update SR.NO automatically
+            self.worksheet.update(f'A{row_number}', [[row_number - 1]])  # -1 because header row
             
             logger.info(f"RFQ {rfq_data.get('rfq_id')} written at row {row_number}")
             
@@ -125,7 +155,7 @@ class LogicEngine:
             records = self.worksheet.get_all_records()
             
             for record in records:
-                if record.get('RFQ ID') == rfq_id:
+                if record.get('RFQ NO') == rfq_id:
                     product_details = record.get('PRODUCT', '{}')
                     try:
                         product_details = json.loads(product_details)
@@ -133,16 +163,27 @@ class LogicEngine:
                         pass
                     
                     return {
-                        'rfq_id': record.get('RFQ ID'),
+                        'rfq_id': record.get('RFQ NO'),
+                        'sales_person': record.get('SALES PERSON'),
                         'customer_name': record.get('CUSTOMER NAME'),
+                        'location': record.get('LOCATION'),
+                        'rfq_date': record.get('RFQ DATE'),
                         'product_details': product_details,
-                        'quantity': record.get('QTY'),
+                        'uid_no': record.get('UID NO'),
+                        'uid_date': record.get('UID DATE'),
+                        'due_date': record.get('DUE DATE'),
+                        'vendor': record.get('VENDOR'),
                         'concern_person_1': record.get('CONCERN PERSON 1'),
-                        'remarks_1': record.get('REMARKS 1'),
+                        'inquiry_sent_on': record.get('INQUIRY SENT ON'),
                         'concern_person_2': record.get('CONCERN PERSON 2'),
+                        'current_status': record.get('CURRENT STATUS'),
+                        'final_status': record.get('FINAL STATUS'),
+                        'remarks_1': record.get('REMARKS 1'),
+                        'followup_concern_person': record.get('FOLLOWUP CONCERN PERSON'),
                         'remarks_2': record.get('REMARKS 2'),
-                        'status': record.get('STATUS'),
-                        'timestamp': record.get('TIMESTAMP')
+                        'system_category': record.get('SYSTEM CATEGORY'),
+                        'system_notes': record.get('SYSTEM NOTES'),
+                        'row_number': record.get('SR.NO')
                     }
             
             logger.warning(f"RFQ not found: {rfq_id}")
@@ -154,32 +195,41 @@ class LogicEngine:
     
     def update_rfq(self, rfq_id, update_data):
         try:
-            cell = self.worksheet.find(rfq_id)
+            cell = self.worksheet.find(rfq_id, in_column=5)  # Column E = RFQ NO
             
             if not cell:
                 return {"success": False, "error": f"RFQ {rfq_id} not found"}
             
             row = cell.row
-            timestamp = datetime.now(timezone.utc).isoformat()
             
-            # UPDATED COLUMN MAP - Match your sheet
+            # COLUMN MAPPING FOR UPDATE
             column_map = {
-                'status': 9,           # STATUS column (I)
-                'concern_person_1': 5, # CONCERN PERSON 1 (E)
-                'remarks_1': 6,        # REMARKS 1 (F)
-                'concern_person_2': 7, # CONCERN PERSON 2 (G)
-                'remarks_2': 8         # REMARKS 2 (H)
+                'current_status': 21,  # Column U = CURRENT STATUS
+                'vendor_quotation_status': 14,  # Column N = VENDOR QUOTATION STATUS
+                'vepl_offer_no': 18,  # Column R = VEPL OFFER NO.
+                'vepl_offer_date': 19,  # Column S = VEPL OFFER DATE
+                'vepl_offer_value': 20,  # Column T = VEPL OFFER VALUE
+                'final_status': 22,  # Column V = FINAL STATUS
+                'remarks_1': 25,  # Column Y = REMARKS 1
+                'followup_date': 27,  # Column AA = FOLLOWUP DATE
+                'remarks_2': 30,  # Column AD = REMARKS 2
+                'last_email_date': 34,  # Column AH = LAST EMAIL DATE
+                'system_notes': 35  # Column AI = SYSTEM NOTES
             }
             
             updates = []
+            timestamp = datetime.now(timezone.utc).isoformat()
             
             for field, value in update_data.items():
                 if field in column_map:
                     col = column_map[field]
                     updates.append({'range': f'{chr(64 + col)}{row}', 'values': [[value]]})
             
-            # Always update timestamp
-            updates.append({'range': f'J{row}', 'values': [[timestamp]]})
+            # Update SYSTEM NOTES with timestamp
+            current_notes = self.worksheet.cell(row, 35).value or ''
+            new_note = f"{timestamp}: {update_data.get('update_note', 'Updated')}"
+            updated_notes = f"{current_notes}\n{new_notes}" if current_notes else new_note
+            updates.append({'range': f'AI{row}', 'values': [[updated_notes]]})
             
             if updates:
                 self.worksheet.batch_update(updates, value_input_option='USER_ENTERED')
@@ -196,7 +246,7 @@ class LogicEngine:
             records = self.worksheet.get_all_records()
             
             if status_filter:
-                records = [r for r in records if r.get('STATUS') == status_filter]
+                records = [r for r in records if r.get('CURRENT STATUS') == status_filter]
             
             records = records[offset:offset + limit]
             
@@ -209,16 +259,22 @@ class LogicEngine:
                     pass
                 
                 formatted_records.append({
-                    'rfq_id': record.get('RFQ ID'),
+                    'sr_no': record.get('SR.NO'),
+                    'rfq_id': record.get('RFQ NO'),
+                    'sales_person': record.get('SALES PERSON'),
                     'customer_name': record.get('CUSTOMER NAME'),
+                    'location': record.get('LOCATION'),
+                    'rfq_date': record.get('RFQ DATE'),
                     'product_details': product_details,
-                    'quantity': record.get('QTY'),
+                    'vendor': record.get('VENDOR'),
                     'concern_person_1': record.get('CONCERN PERSON 1'),
-                    'remarks_1': record.get('REMARKS 1'),
                     'concern_person_2': record.get('CONCERN PERSON 2'),
+                    'current_status': record.get('CURRENT STATUS'),
+                    'final_status': record.get('FINAL STATUS'),
+                    'remarks_1': record.get('REMARKS 1'),
                     'remarks_2': record.get('REMARKS 2'),
-                    'status': record.get('STATUS'),
-                    'timestamp': record.get('TIMESTAMP')
+                    'system_category': record.get('SYSTEM CATEGORY'),
+                    'last_updated': record.get('SYSTEM NOTES', '').split('\n')[-1] if record.get('SYSTEM NOTES') else ''
                 })
             
             return formatted_records
