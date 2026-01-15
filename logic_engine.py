@@ -18,12 +18,12 @@ class LogicEngine:
         self.client = None
         self.spreadsheet = None
         self.worksheet = None
-        self.spreadsheet_id = os.getenv('GOOGLE_SPREADSHEET_ID', '1hKMwlnN3GAE4dxVGvq2WHT2-Om9SJ3P91L8cxioAeoo')
-        self.worksheet_name = os.getenv('WORKSHEET_NAME', 'RFQ TEST SHEET')
+        self.spreadsheet_id = os.getenv('PROD_SHEET_ID', '1hKMwlnN3GAE4dxVGvq2WHT2-Om9SJ3P91L8cxioAeoo')
+        self.worksheet_name = os.getenv('PROD_TAB', 'RFQ TEST SHEET')
         self._initialize_connection()
     
     def _get_credentials(self) -> Credentials:
-        creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
+        creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON') or os.getenv('GOOGLE_CREDS')
         if not creds_json:
             raise ValueError("GOOGLE_CREDENTIALS_JSON environment variable not set")
         
