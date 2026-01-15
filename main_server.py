@@ -121,7 +121,7 @@ async def update_status(rfq_id: str, status: str):
     """Update RFQ status"""
     try:
         update_data = {
-            "status": status,
+            "current_status": status,
             "last_updated": get_timestamp()
         }
         
