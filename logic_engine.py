@@ -228,7 +228,7 @@ class LogicEngine:
             # Update SYSTEM NOTES with timestamp
             current_notes = self.worksheet.cell(row, 35).value or ''
             new_note = f"{timestamp}: {update_data.get('update_note', 'Updated')}"
-            updated_notes = f"{current_notes}\n{new_notes}" if current_notes else new_note
+            updated_notes = f"{current_notes}\n{new_note}" if current_notes else new_note  # ✅ SAHI
             updates.append({'range': f'AI{row}', 'values': [[updated_notes]]})
             
             if updates:
