@@ -1,9 +1,3 @@
-============================================================================
-FILE 2: main_server.py - COMPLETE PRODUCTION READY CODE
-============================================================================
-Copy paste ENTIRELY - Replace your entire main_server.py file
-"""
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
