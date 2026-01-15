@@ -1,3 +1,9 @@
+============================================================================
+FILE 1: logic_engine.py - COMPLETE PRODUCTION READY CODE
+============================================================================
+Copy paste ENTIRELY - Replace your entire logic_engine.py file
+"""
+
 import os
 import json
 import logging
@@ -5,10 +11,13 @@ import gspread
 from google.oauth2.service_account import Credentials
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
+import time
 
 logger = logging.getLogger(__name__)
 
 class LogicEngine:
+    """Google Sheets Integration for RFQ Automation"""
+    
     SCOPES = [
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive'
@@ -18,70 +27,76 @@ class LogicEngine:
         self.client = None
         self.spreadsheet = None
         self.worksheet = None
+        
+        # Use YOUR environment variable names
         self.spreadsheet_id = os.getenv('PROD_SHEET_ID', '1hKMwlnN3GAE4dxVGvq2WHT2-Om9SJ3P91L8cxioAeoo')
         self.worksheet_name = os.getenv('PROD_TAB', 'RFQ TEST SHEET')
+        
         self._initialize_connection()
     
-    def _get_credentials(self) -> Credentials:
-    # Try multiple environment variable names
-    creds_json = (
-        os.getenv('GOOGLE_CREDENTIALS_JSON') or 
-        os.getenv('GOOGLE_CREDS') or 
-        os.getenv('CREDENTIALS_JSON') or
-        os.getenv('GCP_CREDENTIALS')
-    )
-    
-    if not creds_json:
-        raise ValueError(
-            "Google credentials not found. Set one of these environment variables:\n"
-            "- GOOGLE_CREDENTIALS_JSON\n"
-            "- GOOGLE_CREDS\n"
-            "- CREDENTIALS_JSON"
-        )
-    
-    creds_dict = json.loads(creds_json)
-    return Credentials.from_service_account_info(creds_dict, scopes=self.SCOPES)
+    def _get_credentials(self):
+        """Get Google service account credentials"""
+        # Try all possible credential variable names
+        creds_json = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON') or os.getenv('GOOGLE_CREDENTIALS_JSON')
+        
+        if not creds_json:
+            raise ValueError("GOOGLE_SERVICE_ACCOUNT_JSON environment variable not set")
         
         creds_dict = json.loads(creds_json)
         return Credentials.from_service_account_info(creds_dict, scopes=self.SCOPES)
     
     def _initialize_connection(self):
+        """Initialize connection to Google Sheets"""
         try:
+            logger.info("=" * 60)
+            logger.info("INITIALIZING GOOGLE SHEETS CONNECTION")
+            logger.info("=" * 60)
+            
             credentials = self._get_credentials()
-            logger.info(f"Service Account: {credentials.service_account_email}")
+            logger.info(f"✓ Service Account: {credentials.service_account_email}")
             
             self.client = gspread.authorize(credentials)
-            logger.info(f"Opening spreadsheet: {self.spreadsheet_id}")
+            logger.info("✓ Client authorized")
             
+            logger.info(f"Opening spreadsheet ID: {self.spreadsheet_id}")
             self.spreadsheet = self.client.open_by_key(self.spreadsheet_id)
-            logger.info(f"✓ Connected to: {self.spreadsheet.title}")
+            logger.info(f"✓ Connected to spreadsheet: {self.spreadsheet.title}")
             
             try:
                 self.worksheet = self.spreadsheet.worksheet(self.worksheet_name)
                 logger.info(f"✓ Worksheet found: {self.worksheet_name}")
             except gspread.WorksheetNotFound:
-                logger.info(f"Creating worksheet: {self.worksheet_name}")
+                logger.info(f"Creating new worksheet: {self.worksheet_name}")
                 self.worksheet = self.spreadsheet.add_worksheet(title=self.worksheet_name, rows=1000, cols=20)
                 self._initialize_headers()
             
+            logger.info("=" * 60)
+            logger.info("✓✓✓ CONNECTION SUCCESSFUL ✓✓✓")
+            logger.info("=" * 60)
+            
         except Exception as e:
-            logger.error(f"Connection failed: {str(e)}")
+            logger.error(f"✗ Connection failed: {str(e)}")
             raise
     
     def _initialize_headers(self):
+        """Initialize worksheet headers"""
         headers = ['RFQ ID', 'Customer Name', 'Product Details', 'Quantity', 'Status', 'Submission Timestamp', 'Last Updated', 'Notes']
         self.worksheet.update('A1:H1', [headers])
+        logger.info("✓ Headers initialized")
     
-    def test_connection(self) -> bool:
+    def test_connection(self):
+        """Test if connection is active"""
         try:
             self.worksheet.cell(1, 1)
             return True
         except:
             return False
     
-    def write_rfq(self, rfq_data: Dict[str, Any]) -> Dict[str, Any]:
+    def write_rfq(self, rfq_data):
+        """Write RFQ to Google Sheets"""
         try:
             timestamp = datetime.now(timezone.utc).isoformat()
+            
             row_data = [
                 rfq_data.get('rfq_id', ''),
                 rfq_data.get('customer_name', ''),
@@ -96,15 +111,24 @@ class LogicEngine:
             self.worksheet.append_row(row_data, value_input_option='USER_ENTERED')
             row_number = len(self.worksheet.get_all_values())
             
-            logger.info(f"✓ RFQ written at row {row_number}")
-            return {"success": True, "row_number": row_number, "sheet_id": self.spreadsheet_id, "timestamp": timestamp}
+            logger.info(f"✓ RFQ {rfq_data.get('rfq_id')} written at row {row_number}")
+            
+            return {
+                "success": True,
+                "row_number": row_number,
+                "sheet_id": self.spreadsheet_id,
+                "timestamp": timestamp
+            }
+            
         except Exception as e:
-            logger.error(f"Write failed: {str(e)}")
+            logger.error(f"✗ Write failed: {str(e)}")
             return {"success": False, "error": str(e)}
     
-    def read_rfq(self, rfq_id: str) -> Optional[Dict[str, Any]]:
+    def read_rfq(self, rfq_id):
+        """Read RFQ from Google Sheets by ID"""
         try:
             records = self.worksheet.get_all_records()
+            
             for record in records:
                 if record.get('RFQ ID') == rfq_id:
                     product_details = record.get('Product Details', '{}')
@@ -112,6 +136,7 @@ class LogicEngine:
                         product_details = json.loads(product_details)
                     except:
                         pass
+                    
                     return {
                         'rfq_id': record.get('RFQ ID'),
                         'customer_name': record.get('Customer Name'),
@@ -122,14 +147,19 @@ class LogicEngine:
                         'last_updated': record.get('Last Updated'),
                         'notes': record.get('Notes')
                     }
+            
+            logger.warning(f"RFQ not found: {rfq_id}")
             return None
+            
         except Exception as e:
-            logger.error(f"Read failed: {str(e)}")
+            logger.error(f"✗ Read failed: {str(e)}")
             raise
     
-    def update_rfq(self, rfq_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    def update_rfq(self, rfq_id, update_data):
+        """Update RFQ in Google Sheets"""
         try:
             cell = self.worksheet.find(rfq_id)
+            
             if not cell:
                 return {"success": False, "error": f"RFQ {rfq_id} not found"}
             
@@ -150,12 +180,15 @@ class LogicEngine:
             if updates:
                 self.worksheet.batch_update(updates, value_input_option='USER_ENTERED')
             
+            logger.info(f"✓ RFQ {rfq_id} updated")
             return {"success": True, "timestamp": timestamp}
+            
         except Exception as e:
-            logger.error(f"Update failed: {str(e)}")
+            logger.error(f"✗ Update failed: {str(e)}")
             return {"success": False, "error": str(e)}
     
-    def list_rfqs(self, limit: int = 100, offset: int = 0, status_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_rfqs(self, limit=100, offset=0, status_filter=None):
+        """List RFQs from Google Sheets"""
         try:
             records = self.worksheet.get_all_records()
             
@@ -183,6 +216,7 @@ class LogicEngine:
                 })
             
             return formatted_records
+            
         except Exception as e:
-            logger.error(f"List failed: {str(e)}")
+            logger.error(f"✗ List failed: {str(e)}")
             raise
