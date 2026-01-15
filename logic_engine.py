@@ -1,248 +1,173 @@
 import os
-import gspread
 import json
-import sys
-import re
-from datetime import datetime, timedelta
+import logging
+import gspread
 from google.oauth2.service_account import Credentials
+from typing import Dict, Any, List, Optional
+from datetime import datetime, timezone
 
-def run_level50(spreadsheet_id, sheet_name="RFQ TEST SHEET", debug=False):
-    """
-    LEVEL 80 AUTOMATION - REAL VERSION
-    Google Sheet se hi vendor email content fetch karta hai
-    """
-    print(f"🚀 Automation Started: {datetime.now().strftime('%H:%M:%S')}")
+logger = logging.getLogger(__name__)
+
+class LogicEngine:
+    SCOPES = [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive'
+    ]
     
-    # 🔴 DEBUG CODE ADDED HERE
-    print(f"🎯 Target: {spreadsheet_id}, Sheet: {sheet_name}")
-    print(f"📧 Service account: level50-backend-final@vepl-rfq.iam.gserviceaccount.com")
+    def __init__(self):
+        self.client = None
+        self.spreadsheet = None
+        self.worksheet = None
+        self.spreadsheet_id = os.getenv('GOOGLE_SPREADSHEET_ID', '1hKMwlnN3GAE4dxVGvq2WHT2-Om9SJ3P91L8cxioAeoo')
+        self.worksheet_name = os.getenv('WORKSHEET_NAME', 'RFQ TEST SHEET')
+        self._initialize_connection()
     
-    try:
-        # DEBUG: Try to load credentials and list accessible sheets
-        info = json.loads(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"))
-        print(f"✅ JSON loaded, key ID: {info['private_key_id'][:10]}...")
+    def _get_credentials(self) -> Credentials:
+        creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
+        if not creds_json:
+            raise ValueError("GOOGLE_CREDENTIALS_JSON environment variable not set")
         
-        creds = Credentials.from_service_account_info(
-            info, 
-            scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        )
-        gc = gspread.authorize(creds)
-        
-        # LIST ALL ACCESSIBLE SHEETS FIRST
-        print("🔍 Listing ALL accessible sheets...")
-        all_sheets = gc.openall()
-        print(f"   Found {len(all_sheets)} sheets")
-        
-        for s in all_sheets:
-            print(f"   - {s.id} : {s.title}")
-            if spreadsheet_id in s.id:
-                print(f"      🎯 TARGET FOUND!")
-        
-        # NOW TRY TO OPEN SPECIFIC SHEET
-        print(f"\n🎯 Attempting to open: {spreadsheet_id}")
-        ws = gc.open_by_key(spreadsheet_id).worksheet(sheet_name)
-        print(f"✅ SUCCESS! Opened: {ws.title}")
-        
-    except Exception as e:
-        print(f"❌ FAILED: {type(e).__name__}: {e}")
-        print("💡 Check: 1. Spreadsheet sharing 2. Sheet name exists 3. Internet access")
-        return
-    # 🔴 DEBUG CODE ENDS HERE
+        creds_dict = json.loads(creds_json)
+        return Credentials.from_service_account_info(creds_dict, scopes=self.SCOPES)
     
-    try:
-        # 1. GOOGLE SHEETS CONNECT (Again for main logic)
-        info = json.loads(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"))
-        creds = Credentials.from_service_account_info(
-            info, 
-            scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        )
-        gc = gspread.authorize(creds)
-        
-        # 2. OPEN SHEET
-        ws = gc.open_by_key(spreadsheet_id).worksheet(sheet_name)
-        headers = ws.row_values(1)
-        all_data = ws.get_all_values()
-        
-        if len(all_data) <= 1:
-            print("ℹ️ No data to process")
-            return
-        
-        # 3. RULES_CONFIG.PY KE RULES
-        rules = {
-            "status_rules": {
-                "keywords": {
-                    "won": ["order confirmed", "po attached", "po released"],
-                    "lost": ["not approved", "rejected", "lost", "not considered"],
-                    "submitted": ["attached quotation", "sending offer", "quotation attached"],
-                    "query": ["clarification", "discount", "revise", "revision", "gad", "final price"]
-                },
-                "default": "submitted"
-            },
-            "column_map": {
-                "vendor_status": 33,      # Column AH (1-based: 34)
-                "quotation_date": 19,     # Column T (1-based: 20)
-                "remarks": 34,            # Column AI (1-based: 35)
-                "followup_date": 35       # Column AJ (1-based: 36)
-            }
-        }
-        
-        # 4. HEADER POSITIONS FIND KARO
-        header_positions = {}
-        for idx, header in enumerate(headers):
-            header_positions[header.strip().upper()] = idx
-        
-        # 5. VENDOR EMAIL COLUMN IDENTIFY KARO
-        vendor_email_col = None
-        possible_names = ["VENDOR EMAIL", "VENDOR_EMAIL", "EMAIL", "VENDOR MAIL", "VENDOR_MAIL"]
-        for name in possible_names:
-            if name in header_positions:
-                vendor_email_col = header_positions[name]
-                break
-        
-        # 6. VENDOR NOTES/RESPONSE COLUMN IDENTIFY KARO
-        vendor_notes_col = None
-        possible_notes = ["VENDOR NOTES", "VENDOR_NOTES", "RESPONSE", "COMMENTS", "REMARKS", "VENDOR RESPONSE"]
-        for name in possible_notes:
-            if name in header_positions:
-                vendor_notes_col = header_positions[name]
-                break
-        
-        print(f"📊 Found columns: VENDOR_EMAIL at {vendor_email_col}, VENDOR_NOTES at {vendor_notes_col}")
-        
-        # 7. PROCESS EACH ROW
-        processed_count = 0
-        for row_idx, row in enumerate(all_data[1:], start=2):
+    def _initialize_connection(self):
+        try:
+            credentials = self._get_credentials()
+            logger.info(f"Service Account: {credentials.service_account_email}")
+            
+            self.client = gspread.authorize(credentials)
+            logger.info(f"Opening spreadsheet: {self.spreadsheet_id}")
+            
+            self.spreadsheet = self.client.open_by_key(self.spreadsheet_id)
+            logger.info(f"✓ Connected to: {self.spreadsheet.title}")
+            
             try:
-                # RFQ NO check karo (Column D - index 3)
-                rfq_no = row[3] if len(row) > 3 else ""
-                if not rfq_no or not rfq_no.strip():
-                    if debug:
-                        print(f"⏭️ Row {row_idx}: Skipped (No RFQ NO)")
-                    continue
+                self.worksheet = self.spreadsheet.worksheet(self.worksheet_name)
+                logger.info(f"✓ Worksheet found: {self.worksheet_name}")
+            except gspread.WorksheetNotFound:
+                logger.info(f"Creating worksheet: {self.worksheet_name}")
+                self.worksheet = self.spreadsheet.add_worksheet(title=self.worksheet_name, rows=1000, cols=20)
+                self._initialize_headers()
+            
+        except Exception as e:
+            logger.error(f"Connection failed: {str(e)}")
+            raise
+    
+    def _initialize_headers(self):
+        headers = ['RFQ ID', 'Customer Name', 'Product Details', 'Quantity', 'Status', 'Submission Timestamp', 'Last Updated', 'Notes']
+        self.worksheet.update('A1:H1', [headers])
+    
+    def test_connection(self) -> bool:
+        try:
+            self.worksheet.cell(1, 1)
+            return True
+        except:
+            return False
+    
+    def write_rfq(self, rfq_data: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            timestamp = datetime.now(timezone.utc).isoformat()
+            row_data = [
+                rfq_data.get('rfq_id', ''),
+                rfq_data.get('customer_name', ''),
+                json.dumps(rfq_data.get('product_details', {})),
+                rfq_data.get('quantity', ''),
+                rfq_data.get('status', 'submitted'),
+                timestamp,
+                timestamp,
+                rfq_data.get('notes', '')
+            ]
+            
+            self.worksheet.append_row(row_data, value_input_option='USER_ENTERED')
+            row_number = len(self.worksheet.get_all_values())
+            
+            logger.info(f"✓ RFQ written at row {row_number}")
+            return {"success": True, "row_number": row_number, "sheet_id": self.spreadsheet_id, "timestamp": timestamp}
+        except Exception as e:
+            logger.error(f"Write failed: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
+    def read_rfq(self, rfq_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            records = self.worksheet.get_all_records()
+            for record in records:
+                if record.get('RFQ ID') == rfq_id:
+                    product_details = record.get('Product Details', '{}')
+                    try:
+                        product_details = json.loads(product_details)
+                    except:
+                        pass
+                    return {
+                        'rfq_id': record.get('RFQ ID'),
+                        'customer_name': record.get('Customer Name'),
+                        'product_details': product_details,
+                        'quantity': record.get('Quantity'),
+                        'status': record.get('Status'),
+                        'submission_timestamp': record.get('Submission Timestamp'),
+                        'last_updated': record.get('Last Updated'),
+                        'notes': record.get('Notes')
+                    }
+            return None
+        except Exception as e:
+            logger.error(f"Read failed: {str(e)}")
+            raise
+    
+    def update_rfq(self, rfq_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            cell = self.worksheet.find(rfq_id)
+            if not cell:
+                return {"success": False, "error": f"RFQ {rfq_id} not found"}
+            
+            row = cell.row
+            timestamp = datetime.now(timezone.utc).isoformat()
+            
+            column_map = {'status': 5, 'last_updated': 7, 'notes': 8}
+            updates = []
+            
+            for field, value in update_data.items():
+                if field in column_map:
+                    col = column_map[field]
+                    updates.append({'range': f'{chr(64 + col)}{row}', 'values': [[value]]})
+            
+            if 'last_updated' not in update_data:
+                updates.append({'range': f'G{row}', 'values': [[timestamp]]})
+            
+            if updates:
+                self.worksheet.batch_update(updates, value_input_option='USER_ENTERED')
+            
+            return {"success": True, "timestamp": timestamp}
+        except Exception as e:
+            logger.error(f"Update failed: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
+    def list_rfqs(self, limit: int = 100, offset: int = 0, status_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+        try:
+            records = self.worksheet.get_all_records()
+            
+            if status_filter:
+                records = [r for r in records if r.get('Status') == status_filter]
+            
+            records = records[offset:offset + limit]
+            
+            formatted_records = []
+            for record in records:
+                product_details = record.get('Product Details', '{}')
+                try:
+                    product_details = json.loads(product_details)
+                except:
+                    pass
                 
-                # 8. REAL VENDOR EMAIL CONTENT FETCH KARO
-                vendor_email_content = ""
-                
-                # Pehle: Vendor notes column check karo
-                if vendor_notes_col is not None and vendor_notes_col < len(row):
-                    vendor_notes = row[vendor_notes_col]
-                    if vendor_notes and vendor_notes.strip():
-                        vendor_email_content = vendor_notes
-                        source = "VENDOR_NOTES column"
-                
-                # Agar notes nahi hai, toh vendor email column check karo
-                if not vendor_email_content and vendor_email_col is not None and vendor_email_col < len(row):
-                    vendor_email = row[vendor_email_col]
-                    if vendor_email and vendor_email.strip():
-                        vendor_email_content = f"Vendor email: {vendor_email}"
-                        source = "VENDOR_EMAIL column"
-                
-                # Agar kuch bhi nahi mila, toh remarks/description columns check karo
-                if not vendor_email_content:
-                    other_cols = ["DESCRIPTION", "PRODUCT DETAILS", "NOTES", "COMMENTS"]
-                    for col_name in other_cols:
-                        if col_name in header_positions:
-                            col_idx = header_positions[col_name]
-                            if col_idx < len(row) and row[col_idx] and row[col_idx].strip():
-                                vendor_email_content = row[col_idx]
-                                source = f"{col_name} column"
-                                break
-                
-                # Agar abhi bhi kuch nahi mila
-                if not vendor_email_content:
-                    if debug:
-                        print(f"ℹ️ Row {row_idx} ({rfq_no}): No vendor content found")
-                    continue
-                
-                if debug:
-                    print(f"📧 Row {row_idx} ({rfq_no}): Content from {source}")
-                
-                # 9. STATUS DETECT KARO (rules_config.py ke hisaab se)
-                detected_status = rules["status_rules"]["default"]
-                email_lower = vendor_email_content.lower()
-                
-                status_keywords = rules["status_rules"]["keywords"]
-                for status, keywords in status_keywords.items():
-                    for keyword in keywords:
-                        if keyword in email_lower:
-                            detected_status = status
-                            break
-                    if detected_status != rules["status_rules"]["default"]:
-                        break
-                
-                # 10. AUTO COLUMNS UPDATE KARO
-                col_map = rules["column_map"]
-                updates_made = 0
-                
-                # VENDOR STATUS update (Column AH/34)
-                if "vendor_status" in col_map:
-                    status_col = col_map["vendor_status"] + 1  # 0-based to 1-based
-                    if status_col <= len(headers):
-                        current_value = ws.cell(row_idx, status_col).value
-                        if not current_value or current_value.strip() == "":
-                            ws.update_cell(row_idx, status_col, detected_status.upper())
-                            updates_made += 1
-                
-                # QUOTATION DATE update (Column T/20)
-                if "quotation_date" in col_map and detected_status in ["submitted", "won"]:
-                    date_col = col_map["quotation_date"] + 1
-                    if date_col <= len(headers):
-                        current_value = ws.cell(row_idx, date_col).value
-                        if not current_value or current_value.strip() == "":
-                            ws.update_cell(row_idx, date_col, datetime.now().strftime("%Y-%m-%d"))
-                            updates_made += 1
-                
-                # REMARKS update (Column AI/35)
-                if "remarks" in col_map:
-                    remarks_col = col_map["remarks"] + 1
-                    if remarks_col <= len(headers):
-                        current_remarks = ws.cell(row_idx, remarks_col).value or ""
-                        new_remark = f"Auto: {detected_status} @ {datetime.now().strftime('%H:%M')}"
-                        
-                        if current_remarks:
-                            updated_remarks = f"{current_remarks} | {new_remark}"
-                        else:
-                            updated_remarks = new_remark
-                        
-                        ws.update_cell(row_idx, remarks_col, updated_remarks)
-                        updates_made += 1
-                
-                # FOLLOWUP DATE calculate (Column AJ/36)
-                if "followup_date" in col_map:
-                    followup_col = col_map["followup_date"] + 1
-                    if followup_col <= len(headers):
-                        current_value = ws.cell(row_idx, followup_col).value
-                        if not current_value or current_value.strip() == "":
-                            # Follow-up logic based on status
-                            followup_days = 2  # Default
-                            if detected_status == "query":
-                                followup_days = 1
-                            elif detected_status == "won":
-                                followup_days = 0  # No follow-up needed
-                            elif detected_status == "lost":
-                                followup_days = 0  # No follow-up needed
-                            
-                            if followup_days > 0:
-                                followup_date = datetime.now() + timedelta(days=followup_days)
-                                ws.update_cell(row_idx, followup_col, followup_date.strftime("%Y-%m-%d"))
-                                updates_made += 1
-                
-                if updates_made > 0:
-                    print(f"✅ Row {row_idx} ({rfq_no}): {detected_status} [{updates_made} updates]")
-                    processed_count += 1
-                else:
-                    if debug:
-                        print(f"ℹ️ Row {row_idx} ({rfq_no}): No updates needed")
-                
-            except Exception as row_error:
-                print(f"⚠️ Row {row_idx} error: {str(row_error)}")
-                continue
-        
-        print(f"🎯 Automation Complete: {processed_count}/{len(all_data)-1} rows updated")
-        
-    except Exception as e:
-        print(f"❌ System Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-    finally:
-        sys.stdout.flush()
+                formatted_records.append({
+                    'rfq_id': record.get('RFQ ID'),
+                    'customer_name': record.get('Customer Name'),
+                    'product_details': product_details,
+                    'quantity': record.get('Quantity'),
+                    'status': record.get('Status'),
+                    'submission_timestamp': record.get('Submission Timestamp'),
+                    'last_updated': record.get('Last Updated')
+                })
+            
+            return formatted_records
+        except Exception as e:
+            logger.error(f"List failed: {str(e)}")
+            raise
