@@ -23,9 +23,24 @@ class LogicEngine:
         self._initialize_connection()
     
     def _get_credentials(self) -> Credentials:
-        creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON') or os.getenv('GOOGLE_CREDS')
-        if not creds_json:
-            raise ValueError("GOOGLE_CREDENTIALS_JSON environment variable not set")
+    # Try multiple environment variable names
+    creds_json = (
+        os.getenv('GOOGLE_CREDENTIALS_JSON') or 
+        os.getenv('GOOGLE_CREDS') or 
+        os.getenv('CREDENTIALS_JSON') or
+        os.getenv('GCP_CREDENTIALS')
+    )
+    
+    if not creds_json:
+        raise ValueError(
+            "Google credentials not found. Set one of these environment variables:\n"
+            "- GOOGLE_CREDENTIALS_JSON\n"
+            "- GOOGLE_CREDS\n"
+            "- CREDENTIALS_JSON"
+        )
+    
+    creds_dict = json.loads(creds_json)
+    return Credentials.from_service_account_info(creds_dict, scopes=self.SCOPES)
         
         creds_dict = json.loads(creds_json)
         return Credentials.from_service_account_info(creds_dict, scopes=self.SCOPES)
