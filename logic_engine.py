@@ -157,11 +157,16 @@ class LogicEngine:
             
             for record in records:
                 if record.get('RFQ NO') == rfq_id:
-                    product_details = record.get('PRODUCT', '{}')
+                    # Parse product details
+                    product_str = str(record.get('PRODUCT', '{}')).strip()
+                    product_details = {}
                     try:
-                        product_details = json.loads(product_details)
+                        if product_str.startswith('{') and product_str.endswith('}'):
+                            product_details = json.loads(product_str)
+                        else:
+                            product_details = {'raw_product': product_str}
                     except:
-                        pass
+                        product_details = {'raw_product': product_str}
                     
                     return {
                         'rfq_id': record.get('RFQ NO'),
@@ -170,7 +175,7 @@ class LogicEngine:
                         'location': record.get('LOCATION'),
                         'rfq_date': record.get('RFQ DATE'),
                         'product_details': product_details,
-                        'uid_no': record.get('UID NO'),
+                        'uid_no': record.get('UID NO'),  # ✅ UID NO included
                         'uid_date': record.get('UID DATE'),
                         'due_date': record.get('DUE DATE'),
                         'vendor': record.get('VENDOR'),
@@ -255,35 +260,74 @@ class LogicEngine:
             records = records[offset:offset + limit]
             
             formatted_records = []
-            for record in records:
-                product_details = record.get('PRODUCT', '{}')
-                try:
-                    product_details = json.loads(product_details)
-                except:
-                    pass
+            for index, record in enumerate(records, 1):
+                # 1. PRODUCT DETAILS को सही तरीके से हैंडल करें
+                product_str = str(record.get('PRODUCT', '{}')).strip()
+                product_details = {}
                 
+                try:
+                    # JSON स्ट्रिंग है या नहीं चेक करें
+                    if product_str.startswith('{') and product_str.endswith('}'):
+                        product_details = json.loads(product_str)
+                    else:
+                        # JSON नहीं है, तो डिक्शनरी बनाएं
+                        product_details = {
+                            'raw_product': product_str,
+                            'vendor': record.get('VENDOR', '')
+                        }
+                except json.JSONDecodeError as e:
+                    # JSON parse error होने पर
+                    logger.warning(f"JSON parse error for product: {product_str}")
+                    product_details = {'raw_product': product_str}
+                except Exception as e:
+                    logger.error(f"Product parsing error: {e}")
+                    product_details = {'error': str(e)}
+                
+                # 2. UID NO - FIRST PRIORITY: Google Sheets Column H
+                uid_no = str(record.get('UID NO', '')).strip()
+                
+                # अगर UID NO खाली है, तो product_details से id चेक करें
+                if not uid_no and isinstance(product_details, dict) and product_details.get('id'):
+                    uid_no = str(product_details.get('id', '')).strip()
+                
+                # अगर फिर भी खाली है, तो auto-generate करें
+                if not uid_no:
+                    rfq_id = str(record.get('RFQ NO', '')).strip()
+                    sr_no = str(record.get('SR.NO', index)).strip()
+                    uid_no = f"{rfq_id}-{sr_no}" if rfq_id else f"AUTO-UID-{sr_no}"
+                
+                # 3. VENDOR information
+                vendor_value = ''
+                if isinstance(product_details, dict):
+                    vendor_value = product_details.get('vendor') or product_details.get('VENDOR') or ''
+                
+                if not vendor_value:
+                    vendor_value = str(record.get('VENDOR', '')).strip()
+                
+                # 4. FINAL रिकॉर्ड बनाएं
                 formatted_records.append({
-                    'sr_no': record.get('SR.NO'),
-                    'rfq_id': record.get('RFQ NO'),
-                    'sales_person': record.get('SALES PERSON'),
-                    'customer_name': record.get('CUSTOMER NAME'),
-                    'location': record.get('LOCATION'),
-                    'rfq_date': record.get('RFQ DATE'),
+                    'sr_no': record.get('SR.NO') or index,
+                    'rfq_id': record.get('RFQ NO', ''),
+                    'sales_person': record.get('SALES PERSON', ''),
+                    'customer_name': record.get('CUSTOMER NAME', ''),
+                    'location': record.get('LOCATION', ''),
+                    'rfq_date': record.get('RFQ DATE', ''),
                     'product_details': product_details,
-                    'uid_no': record.get('UID NO'),  # ✅ FIX: UID NO ADDED HERE
-                    'vendor': record.get('VENDOR'),
-                    'concern_person_1': record.get('CONCERN PERSON 1'),
-                    'concern_person_2': record.get('CONCERN PERSON 2'),
-                    'current_status': record.get('CURRENT STATUS'),
-                    'final_status': record.get('FINAL STATUS'),
-                    'remarks_1': record.get('REMARKS 1'),
-                    'remarks_2': record.get('REMARKS 2'),
-                    'system_category': record.get('SYSTEM CATEGORY'),
+                    'uid_no': uid_no,  # ✅ GUARANTEED - हमेशा भरेगा
+                    'vendor': vendor_value,
+                    'concern_person_1': record.get('CONCERN PERSON 1', ''),
+                    'concern_person_2': record.get('CONCERN PERSON 2', ''),
+                    'current_status': record.get('CURRENT STATUS', ''),
+                    'final_status': record.get('FINAL STATUS', ''),
+                    'remarks_1': record.get('REMARKS 1', ''),
+                    'remarks_2': record.get('REMARKS 2', ''),
+                    'system_category': record.get('SYSTEM CATEGORY', ''),
                     'last_updated': record.get('SYSTEM NOTES', '').split('\n')[-1] if record.get('SYSTEM NOTES') else ''
                 })
             
+            logger.info(f"✅ Returned {len(formatted_records)} records with UID NO")
             return formatted_records
             
         except Exception as e:
-            logger.error(f"List failed: {str(e)}")
+            logger.error(f"❌ List failed: {str(e)}", exc_info=True)
             raise
