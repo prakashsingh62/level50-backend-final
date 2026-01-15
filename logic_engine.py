@@ -270,6 +270,7 @@ class LogicEngine:
                     'location': record.get('LOCATION'),
                     'rfq_date': record.get('RFQ DATE'),
                     'product_details': product_details,
+                    'uid_no': record.get('UID NO'),  # ✅ FIX: UID NO ADDED HERE
                     'vendor': record.get('VENDOR'),
                     'concern_person_1': record.get('CONCERN PERSON 1'),
                     'concern_person_2': record.get('CONCERN PERSON 2'),
