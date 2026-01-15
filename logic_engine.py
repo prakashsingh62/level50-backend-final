@@ -91,44 +91,45 @@ class LogicEngine:
     def write_rfq(self, rfq_data):
         try:
             timestamp = datetime.now(timezone.utc).isoformat()
+            rfq_date = rfq_data.get('rfq_date', timestamp.split('T')[0])
             
-            # MAP API DATA TO YOUR SHEET COLUMNS
+            # MAP API DATA TO YOUR SHEET COLUMNS (35 columns total)
             row_data = [
-                '',  # SR.NO (auto-increment)
-                rfq_data.get('sales_person', ''),  # SALES PERSON
-                rfq_data.get('customer_name', ''),  # CUSTOMER NAME
-                rfq_data.get('location', ''),  # LOCATION
-                rfq_data.get('rfq_id', ''),  # RFQ NO (using rfq_id from API)
-                rfq_data.get('rfq_date', timestamp.split('T')[0]),  # RFQ DATE
-                json.dumps(rfq_data.get('product_details', {})),  # PRODUCT
-                rfq_data.get('uid_no', ''),  # UID NO
-                rfq_data.get('uid_date', ''),  # UID DATE
-                rfq_data.get('due_date', ''),  # DUE DATE
-                rfq_data.get('vendor', ''),  # VENDOR
-                rfq_data.get('concern_person_1', ''),  # CONCERN PERSON 1
-                rfq_data.get('inquiry_sent_on', ''),  # INQUIRY SENT ON
-                '',  # VENDOR QUOTATION STATUS
-                '',  # VENDOR QUOTATION NO.
-                '',  # VENDOR QUOTATION DATE
-                rfq_data.get('concern_person_2', ''),  # CONCERN PERSON 2
-                '',  # VEPL OFFER NO.
-                '',  # VEPL OFFER DATE
-                '',  # VEPL OFFER VALUE
-                'Submitted',  # CURRENT STATUS
-                '',  # FINAL STATUS
-                '',  # POST OFFER QUERY
-                '',  # POST QUERY DATE
-                rfq_data.get('remarks_1', ''),  # REMARKS 1
-                rfq_data.get('followup_concern_person', ''),  # FOLLOWUP CONCERN PERSON
-                '',  # FOLLOWUP DATE
-                '',  # FOLLOWUP EMAIL
-                '',  # FOLLOWUP CALL
-                rfq_data.get('remarks_2', ''),  # REMARKS 2
-                '',  # Vendor Follow-up Aging
-                '',  # Aging
-                rfq_data.get('system_category', 'API Generated'),  # SYSTEM CATEGORY
-                '',  # LAST EMAIL DATE
-                rfq_data.get('system_notes', 'Submitted via API')  # SYSTEM NOTES
+                '',  # SR.NO (auto-increment) - Column A
+                rfq_data.get('sales_person', ''),  # SALES PERSON - Column B
+                rfq_data.get('customer_name', ''),  # CUSTOMER NAME - Column C
+                rfq_data.get('location', ''),  # LOCATION - Column D
+                rfq_data.get('rfq_id', ''),  # RFQ NO - Column E
+                rfq_date,  # RFQ DATE - Column F
+                json.dumps(rfq_data.get('product_details', {}), separators=(',', ':')),  # PRODUCT - Column G
+                rfq_data.get('uid_no', ''),  # UID NO - Column H
+                rfq_data.get('uid_date', ''),  # UID DATE - Column I
+                rfq_data.get('due_date', ''),  # DUE DATE - Column J
+                rfq_data.get('vendor', ''),  # VENDOR - Column K
+                rfq_data.get('concern_person_1', ''),  # CONCERN PERSON 1 - Column L
+                rfq_data.get('inquiry_sent_on', ''),  # INQUIRY SENT ON - Column M
+                '',  # VENDOR QUOTATION STATUS - Column N
+                '',  # VENDOR QUOTATION NO. - Column O
+                '',  # VENDOR QUOTATION DATE - Column P
+                rfq_data.get('concern_person_2', ''),  # CONCERN PERSON 2 - Column Q
+                '',  # VEPL OFFER NO. - Column R
+                '',  # VEPL OFFER DATE - Column S
+                '',  # VEPL OFFER VALUE - Column T
+                rfq_data.get('current_status', 'Submitted'),  # CURRENT STATUS - Column U (21st column)
+                '',  # FINAL STATUS - Column V
+                '',  # POST OFFER QUERY - Column W
+                '',  # POST QUERY DATE - Column X
+                rfq_data.get('remarks_1', ''),  # REMARKS 1 - Column Y
+                rfq_data.get('followup_concern_person', ''),  # FOLLOWUP CONCERN PERSON - Column Z
+                '',  # FOLLOWUP DATE - Column AA
+                '',  # FOLLOWUP EMAIL - Column AB
+                '',  # FOLLOWUP CALL - Column AC
+                rfq_data.get('remarks_2', ''),  # REMARKS 2 - Column AD
+                '',  # Vendor Follow-up Aging - Column AE
+                '',  # Aging - Column AF
+                rfq_data.get('system_category', 'API Generated'),  # SYSTEM CATEGORY - Column AG
+                '',  # LAST EMAIL DATE - Column AH
+                rfq_data.get('system_notes', 'Submitted via API')  # SYSTEM NOTES - Column AI
             ]
             
             self.worksheet.append_row(row_data, value_input_option='USER_ENTERED')
@@ -195,30 +196,33 @@ class LogicEngine:
     
     def update_rfq(self, rfq_id, update_data):
         try:
-            cell = self.worksheet.find(rfq_id, in_column=5)  # Column E = RFQ NO
+            # Search in Column E (5th column) which is RFQ NO
+            cell = self.worksheet.find(rfq_id, in_column=5)
             
             if not cell:
                 return {"success": False, "error": f"RFQ {rfq_id} not found"}
             
             row = cell.row
+            timestamp = datetime.now(timezone.utc).isoformat()
             
-            # COLUMN MAPPING FOR UPDATE
+            # CORRECT COLUMN MAPPING FOR YOUR SHEET
             column_map = {
-                'current_status': 21,  # Column U = CURRENT STATUS
+                'current_status': 21,   # Column U = CURRENT STATUS (21st column)
+                'final_status': 22,     # Column V = FINAL STATUS (22nd column)
                 'vendor_quotation_status': 14,  # Column N = VENDOR QUOTATION STATUS
-                'vepl_offer_no': 18,  # Column R = VEPL OFFER NO.
+                'vendor_quotation_no': 15,      # Column O = VENDOR QUOTATION NO.
+                'vendor_quotation_date': 16,    # Column P = VENDOR QUOTATION DATE
+                'vepl_offer_no': 18,    # Column R = VEPL OFFER NO.
                 'vepl_offer_date': 19,  # Column S = VEPL OFFER DATE
-                'vepl_offer_value': 20,  # Column T = VEPL OFFER VALUE
-                'final_status': 22,  # Column V = FINAL STATUS
-                'remarks_1': 25,  # Column Y = REMARKS 1
-                'followup_date': 27,  # Column AA = FOLLOWUP DATE
-                'remarks_2': 30,  # Column AD = REMARKS 2
+                'vepl_offer_value': 20, # Column T = VEPL OFFER VALUE
+                'remarks_1': 25,        # Column Y = REMARKS 1 (25th column)
+                'followup_date': 27,    # Column AA = FOLLOWUP DATE
+                'remarks_2': 30,        # Column AD = REMARKS 2 (30th column)
                 'last_email_date': 34,  # Column AH = LAST EMAIL DATE
-                'system_notes': 35  # Column AI = SYSTEM NOTES
+                'system_notes': 35      # Column AI = SYSTEM NOTES (35th column)
             }
             
             updates = []
-            timestamp = datetime.now(timezone.utc).isoformat()
             
             for field, value in update_data.items():
                 if field in column_map:
@@ -227,8 +231,8 @@ class LogicEngine:
             
             # Update SYSTEM NOTES with timestamp
             current_notes = self.worksheet.cell(row, 35).value or ''
-            new_note = f"{timestamp}: {update_data.get('update_note', 'Updated')}"
-            updated_notes = f"{current_notes}\n{new_note}" if current_notes else new_note  # ✅ SAHI
+            new_note = f"{timestamp}: Status updated to {update_data.get('current_status', 'Updated')}"
+            updated_notes = f"{current_notes}\n{new_note}" if current_notes else new_note
             updates.append({'range': f'AI{row}', 'values': [[updated_notes]]})
             
             if updates:
@@ -246,7 +250,7 @@ class LogicEngine:
             records = self.worksheet.get_all_records()
             
             if status_filter:
-                records = [r for r in records if r.get('CURRENT STATUS') == status_filter]
+                records = [r for r in records if str(r.get('CURRENT STATUS', '')).upper() == str(status_filter).upper()]
             
             records = records[offset:offset + limit]
             
