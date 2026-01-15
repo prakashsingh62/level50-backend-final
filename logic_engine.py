@@ -63,8 +63,20 @@ class LogicEngine:
             raise
     
     def _initialize_headers(self):
-        headers = ['RFQ ID', 'Customer Name', 'Product Details', 'Quantity', 'Status', 'Submission Timestamp', 'Last Updated', 'Notes']
-        self.worksheet.update('A1:H1', [headers])
+        # UPDATED HEADERS - Match your Google Sheet
+        headers = [
+            'RFQ ID', 
+            'CUSTOMER NAME', 
+            'PRODUCT', 
+            'QTY',
+            'CONCERN PERSON 1',
+            'REMARKS 1',
+            'CONCERN PERSON 2', 
+            'REMARKS 2',
+            'STATUS',
+            'TIMESTAMP'
+        ]
+        self.worksheet.update('A1:J1', [headers])  # 10 columns
         logger.info("Headers initialized")
     
     def test_connection(self):
@@ -78,15 +90,18 @@ class LogicEngine:
         try:
             timestamp = datetime.now(timezone.utc).isoformat()
             
+            # UPDATED ROW DATA - Match your sheet structure
             row_data = [
                 rfq_data.get('rfq_id', ''),
                 rfq_data.get('customer_name', ''),
-                json.dumps(rfq_data.get('product_details', {})),
+                json.dumps(rfq_data.get('product_details', {})),  # Goes to PRODUCT column
                 rfq_data.get('quantity', ''),
+                rfq_data.get('concern_person_1', ''),  # New field
+                rfq_data.get('remarks_1', ''),        # New field
+                rfq_data.get('concern_person_2', ''),  # New field
+                rfq_data.get('remarks_2', ''),        # New field
                 rfq_data.get('status', 'submitted'),
-                timestamp,
-                timestamp,
-                rfq_data.get('notes', '')
+                timestamp
             ]
             
             self.worksheet.append_row(row_data, value_input_option='USER_ENTERED')
@@ -111,7 +126,7 @@ class LogicEngine:
             
             for record in records:
                 if record.get('RFQ ID') == rfq_id:
-                    product_details = record.get('Product Details', '{}')
+                    product_details = record.get('PRODUCT', '{}')
                     try:
                         product_details = json.loads(product_details)
                     except:
@@ -119,13 +134,15 @@ class LogicEngine:
                     
                     return {
                         'rfq_id': record.get('RFQ ID'),
-                        'customer_name': record.get('Customer Name'),
+                        'customer_name': record.get('CUSTOMER NAME'),
                         'product_details': product_details,
-                        'quantity': record.get('Quantity'),
-                        'status': record.get('Status'),
-                        'submission_timestamp': record.get('Submission Timestamp'),
-                        'last_updated': record.get('Last Updated'),
-                        'notes': record.get('Notes')
+                        'quantity': record.get('QTY'),
+                        'concern_person_1': record.get('CONCERN PERSON 1'),
+                        'remarks_1': record.get('REMARKS 1'),
+                        'concern_person_2': record.get('CONCERN PERSON 2'),
+                        'remarks_2': record.get('REMARKS 2'),
+                        'status': record.get('STATUS'),
+                        'timestamp': record.get('TIMESTAMP')
                     }
             
             logger.warning(f"RFQ not found: {rfq_id}")
@@ -145,7 +162,15 @@ class LogicEngine:
             row = cell.row
             timestamp = datetime.now(timezone.utc).isoformat()
             
-            column_map = {'status': 5, 'last_updated': 7, 'notes': 8}
+            # UPDATED COLUMN MAP - Match your sheet
+            column_map = {
+                'status': 9,           # STATUS column (I)
+                'concern_person_1': 5, # CONCERN PERSON 1 (E)
+                'remarks_1': 6,        # REMARKS 1 (F)
+                'concern_person_2': 7, # CONCERN PERSON 2 (G)
+                'remarks_2': 8         # REMARKS 2 (H)
+            }
+            
             updates = []
             
             for field, value in update_data.items():
@@ -153,8 +178,8 @@ class LogicEngine:
                     col = column_map[field]
                     updates.append({'range': f'{chr(64 + col)}{row}', 'values': [[value]]})
             
-            if 'last_updated' not in update_data:
-                updates.append({'range': f'G{row}', 'values': [[timestamp]]})
+            # Always update timestamp
+            updates.append({'range': f'J{row}', 'values': [[timestamp]]})
             
             if updates:
                 self.worksheet.batch_update(updates, value_input_option='USER_ENTERED')
@@ -171,13 +196,13 @@ class LogicEngine:
             records = self.worksheet.get_all_records()
             
             if status_filter:
-                records = [r for r in records if r.get('Status') == status_filter]
+                records = [r for r in records if r.get('STATUS') == status_filter]
             
             records = records[offset:offset + limit]
             
             formatted_records = []
             for record in records:
-                product_details = record.get('Product Details', '{}')
+                product_details = record.get('PRODUCT', '{}')
                 try:
                     product_details = json.loads(product_details)
                 except:
@@ -185,12 +210,15 @@ class LogicEngine:
                 
                 formatted_records.append({
                     'rfq_id': record.get('RFQ ID'),
-                    'customer_name': record.get('Customer Name'),
+                    'customer_name': record.get('CUSTOMER NAME'),
                     'product_details': product_details,
-                    'quantity': record.get('Quantity'),
-                    'status': record.get('Status'),
-                    'submission_timestamp': record.get('Submission Timestamp'),
-                    'last_updated': record.get('Last Updated')
+                    'quantity': record.get('QTY'),
+                    'concern_person_1': record.get('CONCERN PERSON 1'),
+                    'remarks_1': record.get('REMARKS 1'),
+                    'concern_person_2': record.get('CONCERN PERSON 2'),
+                    'remarks_2': record.get('REMARKS 2'),
+                    'status': record.get('STATUS'),
+                    'timestamp': record.get('TIMESTAMP')
                 })
             
             return formatted_records
