@@ -331,3 +331,498 @@ class LogicEngine:
         except Exception as e:
             logger.error(f"❌ List failed: {str(e)}", exc_info=True)
             raise
+
+# ============================================================
+# RFQ EXPERT AI SYSTEM - HUMAN-LIKE DECISION MAKING
+# ADD THIS COMPLETE SECTION AT THE END OF logic_engine.py
+# ============================================================
+
+class RFQExpertSystem:
+    """
+    HUMAN EXPERT की तरह RFQ analyze करता है
+    5 स्तरों पर सोचता है:
+    1. Current stage पहचाने
+    2. Missing information check करे
+    3. Next logical action suggest करे
+    4. Complete email draft generate करे
+    5. Priority और timeline suggest करे
+    """
+    
+    def analyze_rfq_context(self, rfq_data, email_context=None):
+        """
+        COMPLETE RFQ ANALYSIS with next action prediction
+        
+        Parameters:
+        - rfq_data: Dictionary with RFQ information
+        - email_context: Recent email thread (optional)
+        
+        Returns:
+        {
+            "rfq_number": "RFQ-2024-001",
+            "current_stage": "INQUIRY",
+            "next_action": "SEND_VENDOR_QUOTATION_REQUEST",
+            "confidence": 85,
+            "reasoning": ["No vendor quotes received yet"],
+            "draft_email": "Dear Vendor...",
+            "priority": "HIGH",
+            "suggested_recipient": "vendor@company.com",
+            "suggested_subject": "Quotation Request: RFQ-2024-001",
+            "timeline": "URGENT: Send within 24 hours"
+        }
+        """
+        try:
+            # Get logger if exists, otherwise create simple logger
+            try:
+                logger
+            except NameError:
+                import logging
+                logger = logging.getLogger(__name__)
+            
+            logger.info(f"🤖 AI Analyzing RFQ: {rfq_data.get('rfq_number', 'UNKNOWN')}")
+            
+            # 1. FIRST USE EXISTING LOGIC TO GET CURRENT STAGE
+            # YOUR EXISTING FUNCTION - DON'T CHANGE
+            current_stage = "INQUIRY"  # Default, your function will replace this
+            if hasattr(self, 'determine_rfq_stage'):
+                current_stage = self.determine_rfq_stage(rfq_data)
+            elif 'current_stage' in rfq_data:
+                current_stage = rfq_data.get('current_stage', 'INQUIRY')
+            
+            # 2. INITIALIZE ANALYSIS OBJECT
+            analysis = {
+                "rfq_number": rfq_data.get("rfq_number", "UNKNOWN"),
+                "customer_name": rfq_data.get("customer_name", "Unknown"),
+                "current_stage": current_stage,
+                "next_action": None,
+                "confidence": 0,
+                "reasoning": [],
+                "draft_email": None,
+                "priority": "MEDIUM",
+                "suggested_recipient": None,
+                "suggested_subject": None,
+                "timeline": "Standard: 3 days",
+                "requires_human_approval": True,
+                "ai_engine": "RFQExpertSystem_v1.0"
+            }
+            
+            # ============================================
+            # EXPERT RULE 1: NEED VENDOR QUOTATION
+            # ============================================
+            vendor_condition = (
+                current_stage in ["INQUIRY", "INQUIRY_RECEIVED", "NEW"] and
+                not rfq_data.get("vendor_quotes_received", False) and
+                not rfq_data.get("vendor_quotation_sent", False) and
+                rfq_data.get("valve_count", 0) > 0
+            )
+            
+            if vendor_condition:
+                analysis["next_action"] = "SEND_VENDOR_QUOTATION_REQUEST"
+                analysis["confidence"] = 85
+                analysis["reasoning"].append("New RFQ received, vendor quotation needed")
+                analysis["priority"] = "HIGH"
+                analysis["suggested_recipient"] = rfq_data.get("assigned_vendor_email") or "vendor@company.com"
+                analysis["suggested_subject"] = f"Quotation Request: {rfq_data.get('rfq_number')}"
+                analysis["draft_email"] = self._generate_vendor_quote_email(rfq_data)
+                analysis["timeline"] = "URGENT: Send within 24 hours"
+            
+            # ============================================
+            # EXPERT RULE 2: NEED GAD FOR COMPLEX VALVES
+            # ============================================
+            gad_condition = (
+                rfq_data.get("valve_count", 0) > 3 or 
+                rfq_data.get("complexity_score", 0) > 7 or
+                rfq_data.get("requires_gad", False) or
+                ("GAD" in str(rfq_data.get("technical_specs", "")).upper() or 
+                 "DRAWING" in str(rfq_data.get("technical_specs", "")).upper())
+            )
+            
+            if gad_condition and analysis["next_action"] is None:
+                analysis["next_action"] = "REQUEST_GAD_FROM_VENDOR"
+                analysis["confidence"] = 90
+                analysis["reasoning"].append(f"Complex assembly: {rfq_data.get('valve_count', 0)} valves")
+                if rfq_data.get("complexity_score", 0) > 7:
+                    analysis["reasoning"].append(f"High complexity score: {rfq_data.get('complexity_score')}")
+                analysis["priority"] = "HIGH"
+                analysis["suggested_recipient"] = rfq_data.get("vendor_email") or rfq_data.get("assigned_vendor_email") or "technical@vendor.com"
+                analysis["suggested_subject"] = f"GAD (General Arrangement Drawing) Request: {rfq_data.get('rfq_number')}"
+                analysis["draft_email"] = self._generate_gad_request_email(rfq_data)
+                analysis["timeline"] = "Priority: Required within 3 working days"
+            
+            # ============================================
+            # EXPERT RULE 3: CLIENT FOLLOW-UP NEEDED
+            # ============================================
+            followup_condition = (
+                current_stage in ["QUOTATION_SENT", "PROPOSAL_SENT", "WAITING_CLIENT"] and
+                rfq_data.get("days_since_last_action", 0) > 3
+            )
+            
+            if followup_condition and analysis["next_action"] is None:
+                analysis["next_action"] = "FOLLOW_UP_WITH_CLIENT"
+                analysis["confidence"] = 75
+                analysis["reasoning"].append(f"No response for {rfq_data.get('days_since_last_action', 0)} days")
+                analysis["priority"] = "MEDIUM"
+                analysis["suggested_recipient"] = rfq_data.get("customer_email") or rfq_data.get("client_email")
+                analysis["suggested_subject"] = f"Follow-up: RFQ {rfq_data.get('rfq_number')} - Quotation"
+                analysis["draft_email"] = self._generate_followup_email(rfq_data)
+                analysis["timeline"] = f"Follow up after {rfq_data.get('days_since_last_action', 0)} days silence"
+            
+            # ============================================
+            # EXPERT RULE 4: SEND FINAL PRICE TO CLIENT
+            # ============================================
+            final_price_condition = (
+                current_stage in ["PRICE_NEGOTIATION", "TECHNICAL_APPROVED", "FINALIZING"] and
+                rfq_data.get("final_price_ready", False) and
+                not rfq_data.get("final_price_sent", False) and
+                rfq_data.get("client_awaiting_final_price", True)
+            )
+            
+            if final_price_condition and analysis["next_action"] is None:
+                analysis["next_action"] = "SEND_FINAL_PRICE_TO_CLIENT"
+                analysis["confidence"] = 80
+                analysis["reasoning"].append("Final price approved, ready to send to client")
+                analysis["priority"] = "HIGH"
+                analysis["suggested_recipient"] = rfq_data.get("customer_email") or rfq_data.get("decision_maker_email")
+                analysis["suggested_subject"] = f"FINAL PRICE SUBMISSION: RFQ {rfq_data.get('rfq_number')}"
+                analysis["draft_email"] = self._generate_final_price_email(rfq_data)
+                analysis["timeline"] = "Send today to avoid delays"
+            
+            # ============================================
+            # EXPERT RULE 5: TECHNICAL QUERY TO CLIENT
+            # ============================================
+            technical_query_condition = (
+                current_stage in ["TECHNICAL_REVIEW", "SPECIFICATION_CLARIFICATION"] and
+                rfq_data.get("technical_queries_pending", False) and
+                not rfq_data.get("technical_query_sent", False)
+            )
+            
+            if technical_query_condition and analysis["next_action"] is None:
+                analysis["next_action"] = "SEND_TECHNICAL_QUERY_TO_CLIENT"
+                analysis["confidence"] = 70
+                analysis["reasoning"].append("Technical specifications need clarification")
+                analysis["priority"] = "MEDIUM"
+                analysis["suggested_recipient"] = rfq_data.get("customer_email") or rfq_data.get("technical_contact")
+                analysis["suggested_subject"] = f"Technical Query: RFQ {rfq_data.get('rfq_number')}"
+                analysis["draft_email"] = self._generate_technical_query_email(rfq_data)
+                analysis["timeline"] = "Clarify before proceeding with vendor"
+            
+            # ============================================
+            # FALLBACK: GENERAL FOLLOW-UP
+            # ============================================
+            if analysis["next_action"] is None:
+                analysis["next_action"] = "GENERAL_FOLLOW_UP"
+                analysis["confidence"] = 60
+                analysis["reasoning"].append("Regular follow-up recommended to move RFQ forward")
+                analysis["priority"] = "LOW"
+                analysis["suggested_recipient"] = (
+                    rfq_data.get("customer_email") or 
+                    rfq_data.get("vendor_email") or 
+                    "contact@company.com"
+                )
+                analysis["suggested_subject"] = f"Status Update Request: RFQ {rfq_data.get('rfq_number')}"
+                analysis["draft_email"] = self._generate_general_followup(rfq_data)
+                analysis["timeline"] = "Schedule for next week"
+            
+            logger.info(f"🤖 AI Analysis Complete: {analysis['rfq_number']} -> {analysis['next_action']}")
+            return analysis
+            
+        except Exception as e:
+            # Log error safely
+            error_msg = f"AI Analysis error in RFQExpertSystem: {str(e)}"
+            print(f"❌ ERROR: {error_msg}")
+            
+            # Return safe fallback analysis
+            return {
+                "rfq_number": rfq_data.get("rfq_number", "UNKNOWN"),
+                "current_stage": "ERROR",
+                "next_action": "MANUAL_REVIEW_REQUIRED",
+                "confidence": 0,
+                "reasoning": [f"Analysis error: {str(e)}"],
+                "draft_email": None,
+                "priority": "HIGH",
+                "suggested_recipient": "manager@company.com",
+                "suggested_subject": f"ERROR in RFQ {rfq_data.get('rfq_number', 'UNKNOWN')}",
+                "timeline": "IMMEDIATE ATTENTION NEEDED",
+                "requires_human_approval": True,
+                "ai_engine": "RFQExpertSystem_v1.0_ERROR"
+            }
+    
+    # ============================================
+    # EMAIL TEMPLATE GENERATORS
+    # ============================================
+    
+    def _generate_vendor_quote_email(self, rfq_data):
+        """Generate vendor quotation request email"""
+        customer_name = rfq_data.get('customer_name', 'Valued Customer')
+        location = rfq_data.get('location', 'Site Location')
+        required_date = rfq_data.get('required_date', 'ASAP')
+        valve_count = rfq_data.get('valve_count', 'Multiple')
+        
+        return f"""Dear Vendor,
+
+**QUOTATION REQUEST - {rfq_data.get('rfq_number', 'RFQ')}**
+
+We request your competitive quotation for the following:
+
+**CUSTOMER:** {customer_name}
+**LOCATION:** {location}
+**RFQ NUMBER:** {rfq_data.get('rfq_number', 'N/A')}
+**REQUIRED DATE:** {required_date}
+**VALVES REQUIRED:** {valve_count} valves
+
+**TECHNICAL SPECIFICATIONS:**
+{rfq_data.get('technical_specs', 'Please refer to attached technical data sheet')}
+
+**ADDITIONAL NOTES:**
+{rfq_data.get('special_requirements', 'Standard commercial terms apply')}
+
+**SUBMISSION DEADLINE:** Please submit your quotation within 3 working days.
+
+Please include:
+1. Detailed pricing (ex-works, freight, taxes)
+2. Delivery timeline
+3. Validity period
+4. Technical compliance statement
+
+We look forward to your prompt response.
+
+Best regards,
+
+**Procurement Department**
+[Your Company Name]
+Phone: [Your Contact]
+Email: [Your Email]
+
+---
+*This is an AI-generated draft. Please review before sending.*
+"""
+    
+    def _generate_gad_request_email(self, rfq_data):
+        """Generate GAD (General Arrangement Drawing) request email"""
+        return f"""Dear Technical Team / Vendor,
+
+**URGENT: GAD (GENERAL ARRANGEMENT DRAWING) REQUEST**
+**RFQ:** {rfq_data.get('rfq_number', 'N/A')}
+
+We require General Arrangement Drawings for the following valve assembly:
+
+**PROJECT DETAILS:**
+- Customer: {rfq_data.get('customer_name', 'Confidential')}
+- Valve Count: {rfq_data.get('valve_count', 'Multiple')}
+- Complexity Level: {'High' if rfq_data.get('complexity_score', 0) > 7 else 'Medium'}
+- Application: {rfq_data.get('application', 'Process Industry')}
+
+**GAD REQUIREMENTS:**
+1. Complete assembly drawings with dimensions
+2. Material specifications
+3. Connection details (flanges, ratings)
+4. Actuator mounting details (if applicable)
+5. Bill of Materials (BOM)
+
+**SUBMISSION REQUIREMENTS:**
+- Format: PDF and DWG/AutoCAD
+- Scale: As appropriate for clarity
+- Deadline: Within 72 hours (3 working days)
+
+**IMPORTANT:** GAD approval is required before proceeding with manufacturing.
+
+Please acknowledge receipt and provide expected submission time.
+
+Regards,
+
+**Engineering & Technical Department**
+[Your Company Name]
+
+---
+*This is an AI-generated draft. Please review technical details before sending.*
+"""
+    
+    def _generate_followup_email(self, rfq_data):
+        """Generate client follow-up email"""
+        days_pending = rfq_data.get('days_since_last_action', 'several')
+        quotation_date = rfq_data.get('quotation_date', 'previous week')
+        
+        return f"""Dear {rfq_data.get('customer_name', 'Valued Client')},
+
+**FOLLOW-UP: RFQ {rfq_data.get('rfq_number', '')}**
+
+Hope this email finds you well.
+
+We wanted to follow up on our quotation submitted on {quotation_date} for the above RFQ.
+
+**CURRENT STATUS:** Quotation submitted - awaiting your review/feedback
+
+Could you please provide:
+1. Any technical clarifications required?
+2. Timeline for decision?
+3. Next steps from your side?
+
+We are ready to proceed immediately upon your approval and can discuss:
+- Delivery schedule optimization
+- Technical support
+- Any modifications required
+
+Looking forward to your response.
+
+Warm regards,
+
+**Sales Department**
+[Your Company Name]
+[Contact Person]
+[Phone Number]
+
+---
+*This is an AI-generated draft. Please personalize before sending.*
+"""
+    
+    def _generate_final_price_email(self, rfq_data):
+        """Generate final price submission email"""
+        return f"""Dear {rfq_data.get('customer_name', 'Decision Maker')},
+
+**FINAL PRICE SUBMISSION & ORDER CONFIRMATION**
+**RFQ:** {rfq_data.get('rfq_number', '')}
+
+We are pleased to submit our final and best price for your approval:
+
+**FINAL COMMERCIAL OFFER:**
+- Total Price: {rfq_data.get('final_price', 'Please see attached quotation')}
+- Price Validity: {rfq_data.get('price_validity', '30 days')}
+- Delivery: {rfq_data.get('delivery_time', 'As agreed')}
+- Payment Terms: {rfq_data.get('payment_terms', 'Standard terms')}
+
+**KEY HIGHLIGHTS:**
+✓ All technical requirements met
+✓ Competitive pricing finalized
+✓ Ready for immediate execution
+✓ Quality certification included
+
+**NEXT STEPS FOR ORDER:**
+1. Your formal PO with this final price
+2. We will acknowledge within 24 hours
+3. Production will commence immediately
+
+Please issue the Purchase Order to proceed.
+
+Thank you for your business.
+
+Sincerely,
+
+**Sales & Commercial Department**
+[Your Company Name]
+
+---
+*This is an AI-generated draft. Please verify price details before sending.*
+"""
+    
+    def _generate_technical_query_email(self, rfq_data):
+        """Generate technical clarification email"""
+        return f"""Dear {rfq_data.get('technical_contact', 'Technical Team')},
+
+**TECHNICAL QUERY: RFQ {rfq_data.get('rfq_number', '')}**
+
+We are preparing the quotation and require clarification on the following:
+
+**QUERY POINTS:**
+1. {rfq_data.get('query_1', 'Operating pressure and temperature ranges')}
+2. {rfq_data.get('query_2', 'Material specifications - exact grades required')}
+3. {rfq_data.get('query_3', 'Actuator requirements - pneumatic/electric, fail-safe mode')}
+4. {rfq_data.get('query_4', 'Connection standards and flange ratings')}
+
+**ADDITIONAL INFORMATION REQUIRED:**
+- Process fluid characteristics
+- Installation environment details
+- Any special testing/certification requirements
+
+These clarifications will help us provide the most accurate technical solution and pricing.
+
+Please respond at your earliest convenience.
+
+Technical regards,
+
+**Engineering & Proposal Department**
+[Your Company Name]
+
+---
+*This is an AI-generated draft. Please verify technical queries before sending.*
+"""
+    
+    def _generate_general_followup(self, rfq_data):
+        """Generate general follow-up email"""
+        return f"""Dear Sir/Madam,
+
+**STATUS UPDATE REQUEST: RFQ {rfq_data.get('rfq_number', '')}**
+
+Following up on the above RFQ to understand current status from your side.
+
+**OUR RECORDS SHOW:**
+- Current Stage: {rfq_data.get('current_stage', 'In Progress')}
+- Last Update: {rfq_data.get('last_update_date', 'Recently')}
+- Pending Actions: {rfq_data.get('pending_actions', 'Decision/Feedback')}
+
+Could you please update us on:
+1. Current status and timeline?
+2. Any pending information required from us?
+3. Next expected milestone?
+
+We want to ensure we are aligned and can support your schedule.
+
+Thank you for your cooperation.
+
+Best regards,
+
+**Project Coordination Team**
+[Your Company Name]
+
+---
+*This is an AI-generated draft. Please review before sending.*
+"""
+    
+    def get_expert_rules_summary(self):
+        """Return summary of all expert rules for documentation"""
+        return {
+            "system": "RFQExpertSystem",
+            "version": "1.0",
+            "rules_count": 5,
+            "rules": [
+                {
+                    "id": "RULE_001",
+                    "name": "Vendor Quotation Request",
+                    "condition": "New RFQ with no vendor quotes",
+                    "action": "SEND_VENDOR_QUOTATION_REQUEST",
+                    "priority": "HIGH"
+                },
+                {
+                    "id": "RULE_002",
+                    "name": "GAD Request",
+                    "condition": "Complex valves (>3) or high complexity",
+                    "action": "REQUEST_GAD_FROM_VENDOR",
+                    "priority": "HIGH"
+                },
+                {
+                    "id": "RULE_003",
+                    "name": "Client Follow-up",
+                    "condition": "No response for >3 days after quotation",
+                    "action": "FOLLOW_UP_WITH_CLIENT",
+                    "priority": "MEDIUM"
+                },
+                {
+                    "id": "RULE_004",
+                    "name": "Final Price Submission",
+                    "condition": "Final price ready, not sent to client",
+                    "action": "SEND_FINAL_PRICE_TO_CLIENT",
+                    "priority": "HIGH"
+                },
+                {
+                    "id": "RULE_005",
+                    "name": "Technical Query",
+                    "condition": "Technical clarifications pending",
+                    "action": "SEND_TECHNICAL_QUERY_TO_CLIENT",
+                    "priority": "MEDIUM"
+                }
+            ],
+            "fallback": "GENERAL_FOLLOW_UP",
+            "requires_human_approval": True
+        }
+
+# ============================================================
+# END OF RFQExpertSystem CLASS
+# ============================================================
